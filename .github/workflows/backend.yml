@@ -1,0 +1,30 @@
+name: Backend — build, test e deploy
+
+on:
+  push:
+    branches: [master]
+    paths: ['src/**', 'tests/**', '.github/workflows/backend.yml']
+  workflow_dispatch:
+
+jobs:
+  build-test-deploy:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Testes
+        run: dotnet test --configuration Release
+
+      - name: Publish
+        run: dotnet publish src/WolvesvilleManager.Api -c Release -o publish
+
+      - name: Deploy no Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: wolvesville-manager-api
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: publish
