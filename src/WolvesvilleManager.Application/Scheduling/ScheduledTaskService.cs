@@ -1,0 +1,143 @@
+using Microsoft.EntityFrameworkCore;
+using WolvesvilleManager.Application.Common;
+using WolvesvilleManager.Domain.Entities;
+
+namespace WolvesvilleManager.Application.Scheduling;
+
+/// <summary>CRUD das tarefas agendadas de um clã.</summary>
+public class ScheduledTaskService
+{
+    private readonly IAppDbContext _db;
+
+    public ScheduledTaskService(IAppDbContext db)
+    {
+        _db = db;
+    }
+
+    public async Task<List<ScheduledTaskDto>> ListAsync(int clanRegistrationId, CancellationToken ct = default)
+    {
+        var clanExists = await _db.ClanRegistrations.AnyAsync(c => c.Id == clanRegistrationId, ct);
+        if (!clanExists)
+            throw new NotFoundException($"Clã registrado #{clanRegistrationId} não encontrado.");
+
+        return await _db.ScheduledTasks
+            .AsNoTracking()
+            .Where(t => t.ClanRegistrationId == clanRegistrationId)
+            .OrderBy(t => t.Id)
+            .Select(t => ToDto(t))
+            .ToListAsync(ct);
+    }
+
+    public async Task<ScheduledTaskDto> CreateAsync(
+        int clanRegistrationId, CreateScheduledTaskRequest request, CancellationToken ct = default)
+    {
+        var clanExists = await _db.ClanRegistrations.AnyAsync(c => c.Id == clanRegistrationId, ct);
+        if (!clanExists)
+            throw new NotFoundException($"Clã registrado #{clanRegistrationId} não encontrado.");
+
+        Validate(request);
+
+        var task = new ScheduledTask
+        {
+            ClanRegistrationId = clanRegistrationId,
+            Type = request.Type,
+            CronExpression = request.CronExpression.Trim(),
+            TimeZoneId = request.TimeZoneId.Trim(),
+            MinVotes = request.MinVotes,
+            Enabled = request.Enabled,
+        };
+        task.NextRunAtUtc = task.Enabled
+            ? CronScheduleCalculator.GetNextOccurrenceUtc(task.CronExpression, task.TimeZoneId, DateTime.UtcNow)
+            : null;
+
+        _db.ScheduledTasks.Add(task);
+        await _db.SaveChangesAsync(ct);
+        return ToDto(task);
+    }
+
+    public async Task<ScheduledTaskDto> UpdateAsync(
+        int taskId, CreateScheduledTaskRequest request, CancellationToken ct = default)
+    {
+        var task = await _db.ScheduledTasks.FirstOrDefaultAsync(t => t.Id == taskId, ct)
+            ?? throw new NotFoundException($"Tarefa agendada #{taskId} não encontrada.");
+
+        Validate(request);
+
+        task.Type = request.Type;
+        task.CronExpression = request.CronExpression.Trim();
+        task.TimeZoneId = request.TimeZoneId.Trim();
+        task.MinVotes = request.MinVotes;
+        task.Enabled = request.Enabled;
+        task.NextRunAtUtc = task.Enabled
+            ? CronScheduleCalculator.GetNextOccurrenceUtc(task.CronExpression, task.TimeZoneId, DateTime.UtcNow)
+            : null;
+
+        await _db.SaveChangesAsync(ct);
+        return ToDto(task);
+    }
+
+    public async Task DeleteAsync(int taskId, CancellationToken ct = default)
+    {
+        var task = await _db.ScheduledTasks.FirstOrDefaultAsync(t => t.Id == taskId, ct)
+            ?? throw new NotFoundException($"Tarefa agendada #{taskId} não encontrada.");
+
+        _db.ScheduledTasks.Remove(task);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task<List<TaskExecutionLogDto>> GetLogsAsync(int taskId, int take = 50, CancellationToken ct = default)
+    {
+        var taskExists = await _db.ScheduledTasks.AnyAsync(t => t.Id == taskId, ct);
+        if (!taskExists)
+            throw new NotFoundException($"Tarefa agendada #{taskId} não encontrada.");
+
+        return await _db.TaskExecutionLogs
+            .AsNoTracking()
+            .Where(l => l.ScheduledTaskId == taskId)
+            .OrderByDescending(l => l.RanAtUtc)
+            .Take(Math.Clamp(take, 1, 200))
+            .Select(l => new TaskExecutionLogDto(l.Id, l.RanAtUtc, l.Outcome, l.Message))
+            .ToListAsync(ct);
+    }
+
+    private static void Validate(CreateScheduledTaskRequest request)
+    {
+        if (!Enum.IsDefined(request.Type))
+            throw new BusinessRuleException("Tipo de tarefa inválido.");
+        if (string.IsNullOrWhiteSpace(request.CronExpression) ||
+            !CronScheduleCalculator.IsValidCron(request.CronExpression.Trim()))
+            throw new BusinessRuleException(
+                "Expressão cron inválida. Use o formato de 5 campos, ex.: \"0 20 * * FRI\" (toda sexta às 20h).");
+        if (string.IsNullOrWhiteSpace(request.TimeZoneId) ||
+            !CronScheduleCalculator.IsValidTimeZone(request.TimeZoneId.Trim()))
+            throw new BusinessRuleException(
+                "Fuso horário inválido. Use um ID IANA, ex.: \"America/Sao_Paulo\".");
+        if (request.MinVotes < 0)
+            throw new BusinessRuleException("MinVotes não pode ser negativo.");
+    }
+
+    private static ScheduledTaskDto ToDto(ScheduledTask t) => new(
+        t.Id, t.ClanRegistrationId, t.Type, t.CronExpression, t.TimeZoneId,
+        t.Enabled, t.MinVotes, t.NextRunAtUtc, t.LastRunAtUtc, t.CreatedAtUtc);
+}
+
+public record CreateScheduledTaskRequest(
+    ScheduledTaskType Type,
+    string CronExpression,
+    string TimeZoneId = "America/Sao_Paulo",
+    int MinVotes = 1,
+    bool Enabled = true);
+
+public record ScheduledTaskDto(
+    int Id,
+    int ClanRegistrationId,
+    ScheduledTaskType Type,
+    string CronExpression,
+    string TimeZoneId,
+    bool Enabled,
+    int MinVotes,
+    DateTime? NextRunAtUtc,
+    DateTime? LastRunAtUtc,
+    DateTime CreatedAtUtc);
+
+public record TaskExecutionLogDto(long Id, DateTime RanAtUtc, TaskExecutionOutcome Outcome, string? Message);

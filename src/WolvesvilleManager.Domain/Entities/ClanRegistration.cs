@@ -1,0 +1,31 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace WolvesvilleManager.Domain.Entities;
+
+/// <summary>
+/// Um clã registrado na aplicação: guarda o ID do clã no Wolvesville
+/// e a chave de API (bot) autorizada para gerenciá-lo, criptografada em repouso.
+/// </summary>
+public class ClanRegistration
+{
+    public int Id { get; set; }
+
+    [Required]
+    [MaxLength(64)]
+    public string ClanId { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(100)]
+    public string ClanName { get; set; } = string.Empty;
+
+    [MaxLength(16)]
+    public string? ClanTag { get; set; }
+
+    /// <summary>Chave de API criptografada via ASP.NET Data Protection — nunca em texto puro.</summary>
+    [Required]
+    public string ProtectedApiKey { get; set; } = string.Empty;
+
+    public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    public List<ScheduledTask> ScheduledTasks { get; set; } = new();
+}

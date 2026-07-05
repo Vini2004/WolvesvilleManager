@@ -5,4 +5,7 @@
     <Project Path="src/WolvesvilleManager.Domain/WolvesvilleManager.Domain.csproj" />
     <Project Path="src/WolvesvilleManager.Infrastructure/WolvesvilleManager.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/WolvesvilleManager.Tests/WolvesvilleManager.Tests.csproj" />
+  </Folder>
 </Solution>
