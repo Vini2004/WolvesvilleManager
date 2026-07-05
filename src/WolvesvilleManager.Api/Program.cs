@@ -28,13 +28,19 @@ builder.Services
 
 builder.Services.AddOpenApi();
 
-// CORS para o futuro frontend (SPA em domínio separado).
+// CORS para o frontend (SPA em domínio separado). Em desenvolvimento aceita qualquer
+// origem localhost — o Vite troca de porta quando a padrão (5173) está ocupada.
 const string corsPolicy = "Frontend";
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
 builder.Services.AddCors(options => options.AddPolicy(corsPolicy, policy =>
-    policy.WithOrigins(allowedOrigins)
-        .AllowAnyHeader()
-        .AllowAnyMethod()));
+{
+    policy.AllowAnyHeader().AllowAnyMethod();
+    if (builder.Environment.IsDevelopment())
+        policy.SetIsOriginAllowed(origin =>
+            Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.IsLoopback);
+    else
+        policy.WithOrigins(allowedOrigins);
+}));
 
 builder.Services.AddHostedService<ScheduledTaskRunnerService>();
 
