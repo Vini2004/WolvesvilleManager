@@ -1,0 +1,77 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-night: #0d0b14;
+  --color-side-1: #150f22;
+  --color-side-2: #110c1b;
+  --color-panel-1: #1c1528;
+  --color-panel-2: #170f22;
+  --color-ink: #f2ecff;
+  --color-ink-2: #e9e2f7;
+  --color-lav: #c9bde3;
+  --color-muted: #9182ad;
+  --color-faint: #77678f;
+  --color-dim: #54476b;
+  --color-gold: #d9a441;
+  --color-violet: #8b5cf6;
+  --color-danger: #d9695f;
+  --color-ok: #7fd99a;
+  --color-warn: #e8c98a;
+
+  --font-serif: 'Spectral', serif;
+  --font-sans: 'Manrope', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+@keyframes floatUp {
+  0% { transform: translateY(0) scale(1); opacity: 0; }
+  10% { opacity: 0.7; }
+  90% { opacity: 0.4; }
+  100% { transform: translateY(-140px) scale(0.6); opacity: 0; }
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: rgba(180, 160, 220, 0.15); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@layer components {
+  .card {
+    background: linear-gradient(160deg, #1c1528, #170f22);
+    border: 1px solid rgba(180, 150, 220, 0.12);
+    border-radius: 16px;
+  }
+  .list-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(180, 150, 220, 0.1);
+    border-radius: 14px;
+  }
+  .btn-primary {
+    @apply font-sans text-[13px] font-bold text-[#1a1220] bg-gold border-none px-[18px] py-[10px] rounded-[9px] cursor-pointer transition-[filter] hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply font-sans text-[13px] font-semibold text-ink-2 bg-white/5 border border-[rgba(180,150,220,0.18)] px-4 py-[10px] rounded-[9px] cursor-pointer hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-ghost {
+    @apply font-sans text-[12.5px] font-semibold text-lav bg-transparent border border-[rgba(180,150,220,0.22)] px-[13px] py-[7px] rounded-lg cursor-pointer hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-danger {
+    @apply font-sans text-[13px] font-bold text-white bg-danger border-none px-4 py-[10px] rounded-[9px] cursor-pointer hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-danger-ghost {
+    @apply font-sans text-[12.5px] font-semibold text-danger bg-transparent border border-[rgba(217,105,95,0.35)] px-[13px] py-[7px] rounded-lg cursor-pointer hover:bg-danger/10 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .input-dark {
+    @apply w-full box-border font-mono text-[13.5px] text-ink-2 bg-black/25 border border-[rgba(180,150,220,0.22)] px-4 py-[13px] rounded-[9px] outline-none focus:border-violet/60 placeholder:text-dim;
+  }
+  .field-label {
+    @apply font-sans text-xs font-bold tracking-[0.4px] text-faint uppercase;
+  }
+}
