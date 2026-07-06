@@ -1,3 +1,4 @@
+using System.Net;
 using WolvesvilleManager.Application.Common;
 using WolvesvilleManager.Domain.Exceptions;
 using WolvesvilleManager.Domain.Interfaces;
@@ -22,8 +23,21 @@ public class QuestService
     {
         var (reg, apiKey) = await _resolver.ResolveAsync(clanRegistrationId, ct);
 
-        var active = await _api.GetActiveQuestAsync(apiKey, reg.ClanId, ct);
-        var available = await _api.GetAvailableQuestsAsync(apiKey, reg.ClanId, ct);
+        // A API do Wolvesville às vezes responde 404 (em vez de 204/lista vazia) quando o
+        // clã não tem missão ativa ou nenhuma disponível — tratamos como "nada no momento".
+        ActiveQuest? active = null;
+        try
+        {
+            active = await _api.GetActiveQuestAsync(apiKey, reg.ClanId, ct);
+        }
+        catch (WolvesvilleApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound) { }
+
+        var available = new List<ClanQuest>();
+        try
+        {
+            available = await _api.GetAvailableQuestsAsync(apiKey, reg.ClanId, ct);
+        }
+        catch (WolvesvilleApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound) { }
 
         var votes = new Dictionary<string, int>();
         try
