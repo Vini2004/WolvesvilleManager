@@ -35,7 +35,7 @@ export function Dashboard({ clanRegId }: { clanRegId: number }) {
 
   return (
     <div>
-      <div className="mb-6 grid grid-cols-3 gap-[18px]">
+      <div className="mb-6 grid grid-cols-1 gap-[18px] sm:grid-cols-2 lg:grid-cols-3">
         <div className="card px-6 py-[22px]">
           <div className="mb-2.5 font-sans text-xs uppercase tracking-[0.6px] text-muted">Ouro do clã</div>
           <div className="font-mono text-[34px] font-semibold text-gold">{fmtNumber(data.gold)}</div>

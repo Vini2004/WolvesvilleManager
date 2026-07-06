@@ -66,6 +66,7 @@ export default function App() {
     return raw ? Number(raw) : null
   })
   const [view, setView] = useState<View>('dashboard')
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   const loadClans = useCallback(async () => {
     const list = await api.listClans()
@@ -128,8 +129,18 @@ export default function App() {
     <div className="relative flex min-h-screen overflow-hidden bg-night">
       <Particles />
 
-      {/* SIDEBAR */}
-      <div className="relative z-1 flex w-[264px] flex-none flex-col border-r border-[rgba(180,150,220,0.1)] bg-gradient-to-b from-side-1 to-side-2 px-5 py-7">
+      {/* SIDEBAR — oculto no mobile, vira um drawer sobreposto quando aberto */}
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/60 md:hidden"
+          onClick={() => setMobileNavOpen(false)}
+        />
+      )}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 flex w-[264px] flex-none -translate-x-full flex-col border-r border-[rgba(180,150,220,0.1)] bg-gradient-to-b from-side-1 to-side-2 px-5 py-7 transition-transform md:relative md:z-1 md:translate-x-0 ${
+          mobileNavOpen ? 'translate-x-0' : ''
+        }`}
+      >
         <div className="mb-5 flex items-center gap-3 border-b border-[rgba(180,150,220,0.1)] px-1 pb-7">
           <MoonLogo size={36} />
           <div className="min-w-0">
@@ -160,7 +171,10 @@ export default function App() {
             return (
               <div
                 key={v}
-                onClick={() => setView(v)}
+                onClick={() => {
+                  setView(v)
+                  setMobileNavOpen(false)
+                }}
                 className={`flex cursor-pointer items-center gap-3 rounded-[10px] px-3.5 py-2.5 font-sans text-[13.5px] font-semibold transition-colors ${
                   active ? 'bg-violet/15 text-ink' : 'text-muted hover:text-lav'
                 }`}
@@ -185,20 +199,31 @@ export default function App() {
 
       {/* MAIN */}
       <div className="relative z-1 flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="flex flex-none items-center justify-between border-b border-[rgba(180,150,220,0.1)] px-10 py-[22px]">
-          <div>
-            <div className="font-serif text-[22px] font-semibold text-ink">{title}</div>
-            <div className="mt-0.5 font-sans text-[13px] text-muted">{subtitle}</div>
+        <div className="flex flex-none items-center justify-between gap-3 border-b border-[rgba(180,150,220,0.1)] px-4 py-4 md:px-10 md:py-[22px]">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              onClick={() => setMobileNavOpen(true)}
+              className="flex-none cursor-pointer rounded-lg border border-[rgba(180,150,220,0.22)] p-2 text-lav md:hidden"
+              aria-label="Abrir menu"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              </svg>
+            </button>
+            <div className="min-w-0">
+              <div className="truncate font-serif text-lg font-semibold text-ink md:text-[22px]">{title}</div>
+              <div className="mt-0.5 hidden font-sans text-[13px] text-muted sm:block">{subtitle}</div>
+            </div>
           </div>
           {selectedClan && (
-            <div className="rounded-[20px] border border-[rgba(217,164,65,0.35)] bg-gold/10 px-3 py-1.5 font-sans text-[11.5px] font-bold tracking-[0.4px] text-warn">
+            <div className="flex-none rounded-[20px] border border-[rgba(217,164,65,0.35)] bg-gold/10 px-3 py-1.5 font-sans text-[11.5px] font-bold tracking-[0.4px] text-warn">
               {selectedClan.clanTag ? `#${selectedClan.clanTag} · ` : ''}
               {selectedClan.clanName.toUpperCase()}
             </div>
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-10 pb-16 pt-9">
+        <div className="flex-1 overflow-y-auto px-4 pb-16 pt-6 md:px-10 md:pt-9">
           <div key={view} style={{ animation: 'fadeSlideIn 0.4s ease' }}>
             {needsClan && selectedClan == null ? (
               <div className="card p-7 font-sans text-[13.5px] text-muted">

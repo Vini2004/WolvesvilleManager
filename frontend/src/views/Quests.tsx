@@ -59,7 +59,7 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
           Nenhuma missão disponível no momento.
         </div>
       ) : (
-        <div className="mb-9 grid grid-cols-2 gap-4">
+        <div className="mb-9 grid grid-cols-1 gap-4 sm:grid-cols-2">
           {data.available.map((aq) => {
             const q = aq.quest
             const gems = q.purchasableWithGems

@@ -78,7 +78,7 @@ export function RegisterClan({
   }
 
   return (
-    <div className="grid grid-cols-[1.1fr_0.9fr] items-start gap-6">
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1.1fr_0.9fr]">
       <div className="card px-7 py-[26px]">
         {step === 'key' && (
           <>
