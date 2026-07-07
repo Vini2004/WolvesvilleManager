@@ -186,12 +186,13 @@ public class ScheduledTaskExecutor
         var active = await _api.GetActiveQuestAsync(apiKey, clanId, ct);
         if (active is null)
             return (TaskExecutionOutcome.Skipped, "Não há missão ativa — nada a pular.");
-        if (!active.IsInWaitingPhase)
-            return (TaskExecutionOutcome.Skipped, "A missão ativa já saiu da fase de espera.");
+        if (!active.CanSkipWaitingTime)
+            return (TaskExecutionOutcome.Skipped,
+                "A missão ainda está acumulando XP para o objetivo — não há tempo de espera a pular.");
 
         await _api.SkipQuestWaitingTimeAsync(apiKey, clanId, ct);
         return (TaskExecutionOutcome.Success,
-            $"Tempo de espera da missão \"{active.Quest.DisplayName}\" pulado (gemas debitadas).");
+            $"Tempo de espera da missão \"{active.Quest.DisplayName}\" pulado (ouro debitado).");
     }
 
     private async Task<(TaskExecutionOutcome, string)> ClaimExtraTimeAsync(
@@ -202,7 +203,7 @@ public class ScheduledTaskExecutor
             return (TaskExecutionOutcome.Skipped, "Não há missão ativa — nada a resgatar.");
         if (active.ClaimedTime)
             return (TaskExecutionOutcome.Skipped, "O tempo extra desta missão já foi resgatado.");
-        if (active.IsInWaitingPhase)
+        if (active.IsBeforeTierStart)
             return (TaskExecutionOutcome.Skipped, "A missão ainda está na fase de espera.");
 
         await _api.ClaimQuestExtraTimeAsync(apiKey, clanId, ct);

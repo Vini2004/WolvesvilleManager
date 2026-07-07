@@ -62,12 +62,22 @@ public class ActiveQuest
     public List<QuestParticipant> Participants { get; set; } = new();
 
     /// <summary>
-    /// true enquanto a missão está na fase de espera (ainda não começou a contar XP) —
-    /// é nessa janela que "pular tempo de espera" faz sentido.
+    /// true enquanto o tier atual ainda nem começou a contar XP (janela de espera antes do início).
     /// </summary>
     [JsonIgnore]
-    public bool IsInWaitingPhase =>
+    public bool IsBeforeTierStart =>
         DateTimeOffset.TryParse(TierStartTime, out var start) && start > DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// true quando existe um tempo de espera que o líder/co-líder pode pular gastando ouro do clã.
+    /// Isso acontece quando o objetivo de XP do tier já foi atingido (<see cref="TierFinished"/> ou
+    /// XP acumulado ≥ <see cref="XpPerReward"/>) e agora só falta o cronômetro (TierEndTime) zerar
+    /// para liberar o próximo tier — ou quando o tier ainda nem começou (<see cref="IsBeforeTierStart"/>).
+    /// Enquanto o clã ainda está acumulando XP rumo ao objetivo NÃO há espera a pular.
+    /// </summary>
+    [JsonIgnore]
+    public bool CanSkipWaitingTime =>
+        TierFinished || (XpPerReward > 0 && Xp >= XpPerReward) || IsBeforeTierStart;
 }
 
 public class QuestParticipant
