@@ -40,7 +40,7 @@ public class QuestsController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Pula o tempo de espera da missão ativa. Gasta gemas do clã!</summary>
+    /// <summary>Pula o tempo de espera da missão ativa. Gasta ouro do clã!</summary>
     [HttpPost("skip-waiting-time")]
     public async Task<IActionResult> SkipWaitingTime(int id, CancellationToken ct)
     {

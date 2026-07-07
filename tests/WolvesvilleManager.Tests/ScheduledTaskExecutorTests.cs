@@ -126,7 +126,7 @@ public class ScheduledTaskExecutorTests
     }
 
     [Fact]
-    public async Task SkipWaitingTime_MissaoJaIniciada_Pula()
+    public async Task SkipWaitingTime_AindaAcumulandoXp_NaoPula()
     {
         using var db = CreateDb();
         SeedDueTask(db, ScheduledTaskType.SkipQuestWaitingTime);
@@ -135,7 +135,10 @@ public class ScheduledTaskExecutorTests
             ActiveQuest = new ActiveQuest
             {
                 Quest = Quest("quest-a"),
+                // Tier em andamento e objetivo ainda não batido → não há espera a pular.
                 TierStartTime = DateTimeOffset.UtcNow.AddHours(-1).ToString("O"),
+                Xp = 100,
+                XpPerReward = 9500,
             },
         };
 
@@ -144,6 +147,33 @@ public class ScheduledTaskExecutorTests
         Assert.False(api.SkippedWaitingTime);
         var log = Assert.Single(db.TaskExecutionLogs);
         Assert.Equal(TaskExecutionOutcome.Skipped, log.Outcome);
+    }
+
+    [Fact]
+    public async Task SkipWaitingTime_ObjetivoConcluidoAguardandoCronometro_Pula()
+    {
+        using var db = CreateDb();
+        SeedDueTask(db, ScheduledTaskType.SkipQuestWaitingTime);
+        var api = new FakeWolvesvilleClient
+        {
+            ActiveQuest = new ActiveQuest
+            {
+                Quest = Quest("quest-a"),
+                // Objetivo do tier já batido, mas ainda faltam horas no cronômetro —
+                // é exatamente essa espera que o líder pode pular.
+                TierStartTime = DateTimeOffset.UtcNow.AddHours(-16).ToString("O"),
+                TierEndTime = DateTimeOffset.UtcNow.AddHours(8).ToString("O"),
+                Xp = 19000,
+                XpPerReward = 9500,
+                TierFinished = true,
+            },
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        Assert.True(api.SkippedWaitingTime);
+        var log = Assert.Single(db.TaskExecutionLogs);
+        Assert.Equal(TaskExecutionOutcome.Success, log.Outcome);
     }
 
     [Fact]

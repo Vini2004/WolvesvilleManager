@@ -31,7 +31,12 @@ export function Dashboard({ clanRegId }: { clanRegId: number }) {
   const active = data.active
   const pct = active && active.xpPerReward > 0 ? Math.min(1, active.xp / active.xpPerReward) : 0
   const remaining = active ? timeLeft(active.tierEndTime) : null
+  // Tier ainda não começou a contar XP (janela de espera antes do início).
   const inWaiting = active?.tierStartTime ? new Date(active.tierStartTime) > new Date() : false
+  // Objetivo de XP do tier já batido — falta só o cronômetro zerar para liberar o próximo.
+  const goalReached = !!active && (active.tierFinished || (active.xpPerReward > 0 && active.xp >= active.xpPerReward))
+  // É o líder/co-líder pode pular a espera (gastando ouro) nessas duas situações.
+  const canSkipWait = inWaiting || goalReached
 
   return (
     <div>
@@ -39,12 +44,12 @@ export function Dashboard({ clanRegId }: { clanRegId: number }) {
         <div className="card px-6 py-[22px]">
           <div className="mb-2.5 font-sans text-xs uppercase tracking-[0.6px] text-muted">Ouro do clã</div>
           <div className="font-mono text-[34px] font-semibold text-gold">{fmtNumber(data.gold)}</div>
-          <div className="mt-1.5 font-sans text-xs text-faint">Usado para comprar e iniciar missões</div>
+          <div className="mt-1.5 font-sans text-xs text-faint">Inicia missões, pula esperas e resgata tempo extra</div>
         </div>
         <div className="card px-6 py-[22px]">
           <div className="mb-2.5 font-sans text-xs uppercase tracking-[0.6px] text-muted">Gemas do clã</div>
           <div className="font-mono text-[34px] font-semibold text-violet">{fmtNumber(data.gems)}</div>
-          <div className="mt-1.5 font-sans text-xs text-faint">Pula esperas e resgata tempo extra</div>
+          <div className="mt-1.5 font-sans text-xs text-faint">Usado para iniciar missões pagas com gemas</div>
         </div>
         <div className="card px-6 py-[22px]">
           <div className="mb-2.5 font-sans text-xs uppercase tracking-[0.6px] text-muted">Membros</div>
@@ -79,11 +84,13 @@ export function Dashboard({ clanRegId }: { clanRegId: number }) {
             <div className="rounded-[20px] border border-violet/30 bg-violet/10 px-3.5 py-1.5 font-sans text-[13px] text-lav">
               {inWaiting
                 ? 'Aguardando início'
-                : remaining
-                  ? `Termina em ${remaining}`
-                  : active.tierFinished
-                    ? 'Tier concluído'
-                    : 'Em andamento'}
+                : goalReached && remaining
+                  ? `Objetivo concluído · faltam ${remaining}`
+                  : remaining
+                    ? `Termina em ${remaining}`
+                    : active.tierFinished
+                      ? 'Tier concluído'
+                      : 'Em andamento'}
             </div>
           </div>
 
@@ -115,14 +122,18 @@ export function Dashboard({ clanRegId }: { clanRegId: number }) {
             </div>
             <div className="flex gap-2.5">
               <button
-                disabled={busy !== null || !inWaiting}
+                disabled={busy !== null || !canSkipWait}
                 onClick={() =>
-                  run('skip', 'Pular o tempo de espera? Isso gasta GEMAS do clã.', () =>
+                  run('skip', 'Pular o tempo de espera restante deste tier? Isso gasta OURO do clã.', () =>
                     api.skipWaitingTime(clanRegId),
                   )
                 }
                 className="btn-secondary"
-                title={inWaiting ? undefined : 'A missão já saiu da fase de espera'}
+                title={
+                  canSkipWait
+                    ? 'Pula o tempo de espera restante para liberar o próximo tier (gasta ouro do clã)'
+                    : 'Só dá para pular quando o objetivo de XP do tier já foi concluído (aguardando o cronômetro) ou antes do tier começar'
+                }
               >
                 {busy === 'skip' ? '…' : 'Pular espera'}
               </button>
