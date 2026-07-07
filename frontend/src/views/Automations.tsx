@@ -135,8 +135,8 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
           </div>
         )}
         {tasks.data!.map((t) => (
-          <div key={t.id} className="list-card flex items-center justify-between px-[22px] py-[18px]">
-            <div className="flex min-w-0 flex-1 items-center gap-4">
+          <div key={t.id} className="list-card flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-[22px] py-[18px]">
+            <div className="flex min-w-0 flex-1 basis-[220px] items-center gap-4">
               <Toggle
                 on={t.enabled}
                 disabled={busy}
@@ -162,7 +162,7 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                 </div>
               </div>
             </div>
-            <div className="flex flex-none items-center gap-[22px]">
+            <div className="flex flex-none items-center gap-4 sm:gap-[22px]">
               <div className="text-right">
                 <div className="font-mono text-[11.5px] text-faint">próxima</div>
                 <div className="font-mono text-[12.5px] text-lav">

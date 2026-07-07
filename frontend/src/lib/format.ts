@@ -39,9 +39,14 @@ export function fmtNumber(n: number | null | undefined): string {
   return n == null ? '—' : n.toLocaleString('pt-BR')
 }
 
+/** Datas do nosso backend vêm em UTC mas sem o sufixo "Z" — sem ele o navegador trata como hora local. */
+function parseUtc(iso: string): Date {
+  return new Date(/Z$|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`)
+}
+
 export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—'
-  const d = new Date(iso)
+  const d = parseUtc(iso)
   return isNaN(d.getTime())
     ? '—'
     : d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -49,7 +54,7 @@ export function fmtDate(iso: string | null | undefined): string {
 
 export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return '—'
-  const d = new Date(iso)
+  const d = parseUtc(iso)
   return isNaN(d.getTime())
     ? '—'
     : d.toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
@@ -58,7 +63,7 @@ export function fmtDateTime(iso: string | null | undefined): string {
 /** Tempo restante até `iso` (ex.: "4h 12min"); null se já passou ou inválido. */
 export function timeLeft(iso: string | null | undefined): string | null {
   if (!iso) return null
-  const target = new Date(iso).getTime()
+  const target = parseUtc(iso).getTime()
   if (isNaN(target)) return null
   const ms = target - Date.now()
   if (ms <= 0) return null
