@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
 using WolvesvilleManager.Api.Background;
 using WolvesvilleManager.Api.Filters;
 using WolvesvilleManager.Api.Security;
@@ -46,12 +47,22 @@ builder.Services.AddHostedService<ScheduledTaskRunnerService>();
 
 var app = builder.Build();
 
+// Aplica migrações pendentes no startup — sem acesso fácil ao banco no plano gratuito do Azure,
+// este é o jeito mais simples de manter o esquema em dia a cada deploy.
+using (var scope = app.Services.CreateScope())
+    scope.ServiceProvider.GetRequiredService<WolvesvilleManager.Infrastructure.Persistence.AppDbContext>()
+        .Database.Migrate();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// Em desenvolvimento o frontend fala direto com a porta HTTP (VITE_API_URL) — redirecionar para
+// HTTPS exigiria que o certificado dev do ASP.NET Core estivesse confiável no SO, o que trava o
+// fetch do navegador silenciosamente (aparece como "não foi possível conectar").
+if (!app.Environment.IsDevelopment())
+    app.UseHttpsRedirection();
 app.UseCors(corsPolicy);
 app.UseMiddleware<ApiKeyAuthMiddleware>();
 

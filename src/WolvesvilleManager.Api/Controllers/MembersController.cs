@@ -19,6 +19,10 @@ public class MembersController : ControllerBase
     public Task<List<ClanMember>> List(int id, CancellationToken ct) =>
         _service.ListAsync(id, ct);
 
+    [HttpGet("xp-report")]
+    public Task<XpReport> XpReport(int id, [FromQuery] int days = 7, CancellationToken ct = default) =>
+        _service.GetXpReportAsync(id, Math.Clamp(days, 1, 90), ct);
+
     [HttpGet("blocklist")]
     public Task<List<BlocklistEntry>> Blocklist(int id, CancellationToken ct) =>
         _service.GetBlocklistAsync(id, ct);

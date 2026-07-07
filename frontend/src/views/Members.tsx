@@ -4,6 +4,69 @@ import { Avatar, ErrorBox, Loading, SectionTitle, Toggle } from '../components/u
 import { useAsync } from '../lib/useAsync'
 import { fmtDate, fmtNumber } from '../lib/format'
 
+function XpReportSection({ clanRegId }: { clanRegId: number }) {
+  const [days, setDays] = useState(7)
+  const report = useAsync(() => api.getXpReport(clanRegId, days), [clanRegId, days])
+
+  return (
+    <div className="mt-7">
+      <div className="mb-3.5 flex items-center justify-between">
+        <SectionTitle>Relatório de XP</SectionTitle>
+        <div className="flex gap-1.5">
+          {(
+            [
+              [7, 'Semanal'],
+              [30, 'Mensal'],
+            ] as [number, string][]
+          ).map(([d, label]) => (
+            <button
+              key={d}
+              onClick={() => setDays(d)}
+              className={`cursor-pointer rounded-[20px] border px-3 py-1 font-sans text-[11.5px] font-semibold ${
+                days === d
+                  ? 'border-violet/50 bg-violet/15 text-ink'
+                  : 'border-[rgba(180,150,220,0.22)] bg-transparent text-muted hover:text-lav'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {report.loading ? (
+        <Loading />
+      ) : report.error ? (
+        <ErrorBox message={report.error} onRetry={report.reload} />
+      ) : report.data!.sinceUtc == null ? (
+        <div className="list-card px-5 py-5 font-sans text-[13px] text-muted">
+          Ainda não há histórico suficiente — o sistema tira uma foto diária do XP e o relatório
+          passa a valer a partir de amanhã.
+        </div>
+      ) : (
+        <div className="list-card">
+          <div className="border-b border-[rgba(180,150,220,0.1)] px-5 py-3 font-sans text-[11.5px] text-faint">
+            Ganho de XP de {fmtDate(report.data!.sinceUtc)} até {fmtDate(new Date().toISOString())}
+          </div>
+          {report.data!.entries.map((e) => (
+            <div
+              key={e.playerId}
+              className="flex items-center justify-between border-b border-[rgba(180,150,220,0.07)] px-5 py-3 last:border-b-0"
+            >
+              <div className="font-sans text-[13.5px] text-ink-2">{e.username}</div>
+              <div className="flex items-center gap-5">
+                <div className="font-mono text-xs text-faint">total {fmtNumber(e.currentXp)}</div>
+                <div className="w-[90px] text-right font-mono text-[13px] font-semibold text-gold">
+                  {e.gainedXp == null ? 'novo' : `+${fmtNumber(e.gainedXp)}`}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 const STATUS_META: Record<string, { label: string; color: string }> = {
   ONLINE: { label: 'Online', color: '#7fd99a' },
   PLAY: { label: 'Em partida', color: '#7fd99a' },
@@ -97,6 +160,11 @@ export function Members({ clanRegId }: { clanRegId: number }) {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-sans text-sm font-semibold text-ink-2">{m.username}</span>
+                    {m.isLeader && (
+                      <span className="rounded-[20px] border border-[rgba(217,164,65,0.5)] bg-gold/20 px-2 py-0.5 font-sans text-[10px] font-bold tracking-[0.3px] text-gold">
+                        Líder
+                      </span>
+                    )}
                     {m.isCoLeader && (
                       <span className="rounded-[20px] border border-[rgba(217,164,65,0.3)] bg-gold/10 px-2 py-0.5 font-sans text-[10px] font-bold tracking-[0.3px] text-gold">
                         Vice-líder
@@ -148,6 +216,8 @@ export function Members({ clanRegId }: { clanRegId: number }) {
           )
         })}
       </div>
+
+      <XpReportSection clanRegId={clanRegId} />
 
       <div className="mt-7">
         <SectionTitle>Bloqueados</SectionTitle>

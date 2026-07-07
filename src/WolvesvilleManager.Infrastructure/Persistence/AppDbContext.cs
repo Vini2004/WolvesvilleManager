@@ -11,6 +11,7 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<ClanRegistration> ClanRegistrations => Set<ClanRegistration>();
     public DbSet<ScheduledTask> ScheduledTasks => Set<ScheduledTask>();
     public DbSet<TaskExecutionLog> TaskExecutionLogs => Set<TaskExecutionLog>();
+    public DbSet<MemberXpSnapshot> MemberXpSnapshots => Set<MemberXpSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -38,6 +39,17 @@ public class AppDbContext : DbContext, IAppDbContext
         {
             e.HasIndex(l => new { l.ScheduledTaskId, l.RanAtUtc });
             e.Property(l => l.Outcome).HasConversion<string>().HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<MemberXpSnapshot>(e =>
+        {
+            e.HasIndex(s => new { s.ClanRegistrationId, s.TakenAtUtc });
+            e.Property(s => s.PlayerId).HasMaxLength(50);
+            e.Property(s => s.Username).HasMaxLength(100);
+            e.HasOne(s => s.ClanRegistration)
+                .WithMany()
+                .HasForeignKey(s => s.ClanRegistrationId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

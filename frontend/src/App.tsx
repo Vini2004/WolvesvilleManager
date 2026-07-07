@@ -7,14 +7,28 @@ import { Dashboard } from './views/Dashboard'
 import { Quests } from './views/Quests'
 import { Members } from './views/Members'
 import { Automations } from './views/Automations'
+import { Announcements } from './views/Announcements'
+import { Chat } from './views/Chat'
+import { Activity } from './views/Activity'
 import { RegisterClan } from './views/RegisterClan'
 
-type View = 'dashboard' | 'quests' | 'members' | 'automations' | 'register'
+type View =
+  | 'dashboard'
+  | 'quests'
+  | 'members'
+  | 'announcements'
+  | 'chat'
+  | 'activity'
+  | 'automations'
+  | 'register'
 
 const TITLES: Record<View, [string, string]> = {
   dashboard: ['Visão geral', 'Ouro, gemas e a missão ativa do clã'],
   quests: ['Missões', 'Disponíveis, votos e histórico de conclusões'],
   members: ['Membros', 'Participação em missões, kick e bloqueios'],
+  announcements: ['Anúncios', 'Publique avisos para todo o clã'],
+  chat: ['Chat', 'Converse com o clã pelo bot'],
+  activity: ['Atividade', 'Livro-razão e log de auditoria do clã'],
   automations: ['Automações', 'Tarefas agendadas via expressão cron'],
   register: ['Registrar clã', 'Conecte uma chave de API de clan bot'],
 }
@@ -39,6 +53,22 @@ const NAV_ICONS: Record<View, React.ReactNode> = {
       <circle cx="16" cy="11" r="3.2" stroke="currentColor" strokeWidth="1.8" />
       <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
       <path d="M15.5 14.3c2.6 0.5 4.5 2.5 4.5 5.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  ),
+  announcements: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M3 10v4l11 5V5L3 10z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M17 9a4 4 0 0 1 0 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  ),
+  chat: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M21 12a8 8 0 0 1-8 8H4l2.3-2.9A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    </svg>
+  ),
+  activity: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <path d="M3 12h4l2.5-7 4 14 2.5-7h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
   automations: (
@@ -238,6 +268,9 @@ export default function App() {
                 {view === 'dashboard' && selectedClan && <Dashboard clanRegId={selectedClan.id} />}
                 {view === 'quests' && selectedClan && <Quests clanRegId={selectedClan.id} />}
                 {view === 'members' && selectedClan && <Members clanRegId={selectedClan.id} />}
+                {view === 'announcements' && selectedClan && <Announcements clanRegId={selectedClan.id} />}
+                {view === 'chat' && selectedClan && <Chat clanRegId={selectedClan.id} />}
+                {view === 'activity' && selectedClan && <Activity clanRegId={selectedClan.id} />}
                 {view === 'automations' && selectedClan && <Automations clanRegId={selectedClan.id} />}
                 {view === 'register' && <RegisterClan clans={clans} onChanged={loadClans} />}
               </>

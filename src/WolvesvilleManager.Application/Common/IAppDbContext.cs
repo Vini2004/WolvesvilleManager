@@ -12,6 +12,7 @@ public interface IAppDbContext
     DbSet<ClanRegistration> ClanRegistrations { get; }
     DbSet<ScheduledTask> ScheduledTasks { get; }
     DbSet<TaskExecutionLog> TaskExecutionLogs { get; }
+    DbSet<MemberXpSnapshot> MemberXpSnapshots { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

@@ -1,14 +1,19 @@
 import type {
   AvailableQuest,
   BlocklistEntry,
+  ChatMessage,
+  ClanAnnouncement,
+  ClanLogEntry,
   ClanInfo,
   ClanMember,
   CreateScheduledTaskRequest,
+  LedgerEntry,
   QuestHistoryEntry,
   QuestsOverview,
   RegisteredClan,
   ScheduledTask,
   TaskExecutionLog,
+  XpReport,
 } from './types'
 
 const BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://localhost:5074'
@@ -106,6 +111,8 @@ export const api = {
 
   // ---------- Membros ----------
   listMembers: (clanId: number) => request<ClanMember[]>(`/api/clans/${clanId}/members`),
+  getXpReport: (clanId: number, days: number) =>
+    request<XpReport>(`/api/clans/${clanId}/members/xp-report?days=${days}`),
   getBlocklist: (clanId: number) =>
     request<BlocklistEntry[]>(`/api/clans/${clanId}/members/blocklist`),
   setParticipation: (clanId: number, playerId: string, participate: boolean) =>
@@ -127,6 +134,25 @@ export const api = {
     request<void>(`/api/clans/${clanId}/members/${playerId}/block`, { method: 'POST' }),
   unblockMember: (clanId: number, playerId: string) =>
     request<void>(`/api/clans/${clanId}/members/${playerId}/unblock`, { method: 'POST' }),
+
+  // ---------- Anúncios ----------
+  getAnnouncements: (clanId: number) =>
+    request<ClanAnnouncement[]>(`/api/clans/${clanId}/announcements`),
+  postAnnouncement: (clanId: number, message: string) =>
+    request<void>(`/api/clans/${clanId}/announcements`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    }),
+
+  // ---------- Chat, ledger e logs ----------
+  getChat: (clanId: number) => request<ChatMessage[]>(`/api/clans/${clanId}/chat`),
+  sendChat: (clanId: number, message: string) =>
+    request<void>(`/api/clans/${clanId}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ message }),
+    }),
+  getLedger: (clanId: number) => request<LedgerEntry[]>(`/api/clans/${clanId}/ledger`),
+  getLogs: (clanId: number) => request<ClanLogEntry[]>(`/api/clans/${clanId}/logs`),
 
   // ---------- Automações ----------
   listScheduledTasks: (clanId: number) =>

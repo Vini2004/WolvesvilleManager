@@ -44,6 +44,9 @@ public class ClanMember
 
     public string? Status { get; set; }
     public bool IsCoLeader { get; set; }
+
+    /// <summary>A API não envia este campo — é preenchido comparando com o LeaderId do clã.</summary>
+    public bool IsLeader { get; set; }
     public string? LastOnline { get; set; }
     public string? CreationTime { get; set; }
 

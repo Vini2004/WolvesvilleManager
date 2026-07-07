@@ -79,6 +79,7 @@ export interface ClanMember {
   status: string | null
   playerStatus: string | null
   isCoLeader: boolean
+  isLeader: boolean
   lastOnline: string | null
   participateInClanQuests: boolean | null
 }
@@ -122,4 +123,50 @@ export interface TaskExecutionLog {
   ranAtUtc: string
   outcome: TaskExecutionOutcome
   message: string | null
+}
+
+export interface XpReportEntry {
+  playerId: string
+  username: string
+  currentXp: number
+  baselineXp: number | null
+  gainedXp: number | null
+}
+
+export interface XpReport {
+  sinceUtc: string | null
+  entries: XpReportEntry[]
+}
+
+export interface ClanAnnouncement {
+  id: string | null
+  content: string | null
+  author: string | null
+  timestamp: string | null
+}
+
+export interface ChatMessage {
+  playerId: string | null
+  playerBotId: string | null
+  playerBotOwnerUsername: string | null
+  msg: string | null
+  isSystem: boolean
+  date: string | null
+}
+
+export interface LedgerEntry {
+  id: string | null
+  playerId: string | null
+  playerUsername: string | null
+  gold: number | null
+  gems: number | null
+  type: string | null
+  creationTime: string | null
+}
+
+export interface ClanLogEntry {
+  action: string | null
+  playerUsername: string | null
+  targetPlayerUsername: string | null
+  creationTime: string | null
 }

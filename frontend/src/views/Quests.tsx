@@ -59,17 +59,18 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
           Nenhuma missão disponível no momento.
         </div>
       ) : (
-        <div className="mb-9 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="mb-9 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {data.available.map((aq) => {
             const q = aq.quest
             const gems = q.purchasableWithGems
             return (
-              <div key={q.id} className="list-card overflow-hidden">
+              <div key={q.id} className="list-card flex flex-col overflow-hidden">
                 {q.promoImageUrl ? (
-                  <img src={q.promoImageUrl} alt="" className="h-24 w-full object-cover" />
+                  // Altura natural: a proporção original da arte, sem cortes.
+                  <img src={q.promoImageUrl} alt="" className="w-full" />
                 ) : (
                   <div
-                    className="flex h-24 items-center justify-center"
+                    className="flex h-48 items-center justify-center"
                     style={{
                       background:
                         'repeating-linear-gradient(135deg,rgba(255,255,255,0.05),rgba(255,255,255,0.05) 10px,rgba(255,255,255,0.02) 10px,rgba(255,255,255,0.02) 20px)',
@@ -78,7 +79,7 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
                     <span className="font-mono text-[11px] tracking-[0.4px] text-white/50">sem imagem</span>
                   </div>
                 )}
-                <div className="px-[18px] py-4">
+                <div className="flex flex-1 flex-col px-[18px] py-4">
                   <div className="flex items-center justify-between gap-2.5">
                     <div className="font-serif text-[16.5px] font-semibold capitalize text-ink">
                       {questName(q)}
@@ -96,7 +97,7 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
                   </div>
                   <div className="mt-1.5 font-sans text-[12.5px] text-muted">{rewardsSummary(q.rewards)}</div>
 
-                  <div className="mt-3.5">
+                  <div className="mb-4 mt-3.5">
                     <div className="mb-1.5 flex justify-between font-mono text-[11.5px] text-faint">
                       <span>
                         {aq.votes} {aq.votes === 1 ? 'voto' : 'votos'}
@@ -120,7 +121,7 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
                         () => api.claimQuest(clanRegId, q.id),
                       )
                     }
-                    className="btn-primary mt-4 w-full"
+                    className="btn-primary mt-auto w-full"
                   >
                     {busy === `claim-${q.id}` ? '…' : 'Iniciar missão'}
                   </button>

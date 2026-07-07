@@ -10,13 +10,29 @@ export function initials(name: string): string {
     .toUpperCase()
 }
 
-/** Nome legível derivado do arquivo da imagem promocional (a API não envia nome). */
+// ponytail: a API não tem nome oficial nem tradução de missões — dicionário curado,
+// adicione entradas conforme novas missões aparecerem no clã.
+const QUEST_TITLES_PT: Record<string, string> = {
+  fallenangel: 'Anjo Caído',
+  untilbreathes: 'Último Suspiro',
+  redless: 'Sem Vermelho',
+  settler: 'Colonizadores',
+  memories: 'Memórias',
+  fairycold: 'Fada do Gelo',
+  killercircus: 'Circo Assassino',
+  chilli: 'Pimenta',
+  coolkid: 'Descolado',
+  puppyball: 'Filhote Brincalhão',
+}
+
+/** Nome legível derivado do arquivo da imagem promocional (a API não envia nome), traduzido quando conhecido. */
 export function questName(quest: ClanQuest): string {
   if (!quest.promoImageUrl) return 'Missão'
   const file = quest.promoImageUrl.split('/').pop() ?? ''
   const dot = file.lastIndexOf('.')
   const base = dot > 0 ? file.slice(0, dot) : file
-  return base.replace(/[-_]/g, ' ')
+  const key = base.toLowerCase().replace(/[-_\d]/g, '')
+  return QUEST_TITLES_PT[key] ?? base.replace(/[-_]/g, ' ')
 }
 
 export function fmtNumber(n: number | null | undefined): string {

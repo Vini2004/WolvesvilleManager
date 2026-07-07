@@ -4,30 +4,49 @@ import type { CreateScheduledTaskRequest, ScheduledTask, ScheduledTaskType, Task
 import { ErrorBox, Loading, Modal, SectionTitle, Toggle } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 import { fmtDateTime, humanCron, OUTCOME_META, TASK_TYPE_LABELS } from '../lib/format'
+import { buildCron, parseCron, WEEKDAY_OPTIONS, DEFAULT_SCHEDULE, type FriendlySchedule } from '../lib/cron'
 
-const CRON_PRESETS: { label: string; value: string }[] = [
-  { label: 'Toda sexta às 20:00', value: '0 20 * * FRI' },
-  { label: 'Todos os dias às 09:00', value: '0 9 * * *' },
-  { label: 'Toda segunda à meia-noite', value: '0 0 * * MON' },
-  { label: 'A cada 30 minutos', value: '*/30 * * * *' },
-]
+type Mode = 'simple' | 'advanced'
 
 interface FormState {
   type: ScheduledTaskType
-  cronExpression: string
+  mode: Mode
+  schedule: FriendlySchedule
+  advancedCron: string
   minVotes: number
   enabled: boolean
 }
 
 const DEFAULT_FORM: FormState = {
   type: 'ClaimMostVotedQuest',
-  cronExpression: '0 20 * * FRI',
+  mode: 'simple',
+  schedule: { ...DEFAULT_SCHEDULE },
+  advancedCron: buildCron(DEFAULT_SCHEDULE),
   minVotes: 1,
   enabled: true,
 }
 
+function formFromTask(t: ScheduledTask): FormState {
+  const parsed = parseCron(t.cronExpression)
+  return {
+    type: t.type,
+    mode: parsed ? 'simple' : 'advanced',
+    schedule: parsed ?? { ...DEFAULT_SCHEDULE },
+    advancedCron: t.cronExpression,
+    minVotes: t.minVotes,
+    enabled: t.enabled,
+  }
+}
+
 function toRequest(f: FormState): CreateScheduledTaskRequest {
-  return { ...f, timeZoneId: 'America/Sao_Paulo' }
+  const cronExpression = f.mode === 'simple' ? buildCron(f.schedule) : f.advancedCron
+  return {
+    type: f.type,
+    cronExpression,
+    timeZoneId: 'America/Sao_Paulo',
+    minVotes: f.minVotes,
+    enabled: f.enabled,
+  }
 }
 
 export function Automations({ clanRegId }: { clanRegId: number }) {
@@ -154,15 +173,7 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                 disabled={busy}
                 onClick={() => {
                   setFormError(null)
-                  setModal({
-                    editing: t,
-                    form: {
-                      type: t.type,
-                      cronExpression: t.cronExpression,
-                      minVotes: t.minVotes,
-                      enabled: t.enabled,
-                    },
-                  })
+                  setModal({ editing: t, form: formFromTask(t) })
                 }}
                 className="btn-ghost"
               >
@@ -246,31 +257,135 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
             ))}
           </select>
 
-          <div className="field-label mb-1.5 mt-[18px]">Quando (horário de São Paulo)</div>
-          <div className="mb-2 flex flex-wrap gap-1.5">
-            {CRON_PRESETS.map((p) => (
-              <button
-                key={p.value}
-                onClick={() => setModal({ ...modal, form: { ...modal.form, cronExpression: p.value } })}
-                className={`cursor-pointer rounded-[20px] border px-3 py-1 font-sans text-[11.5px] font-semibold ${
-                  modal.form.cronExpression === p.value
-                    ? 'border-violet/50 bg-violet/15 text-ink'
-                    : 'border-[rgba(180,150,220,0.22)] bg-transparent text-muted hover:text-lav'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
+          <div className="field-label mb-1.5 mt-[18px] flex items-center justify-between">
+            <span>Quando (horário de São Paulo)</span>
+            <button
+              onClick={() =>
+                setModal({
+                  ...modal,
+                  form: {
+                    ...modal.form,
+                    mode: modal.form.mode === 'simple' ? 'advanced' : 'simple',
+                    advancedCron: modal.form.mode === 'simple' ? buildCron(modal.form.schedule) : modal.form.advancedCron,
+                  },
+                })
+              }
+              className="cursor-pointer border-none bg-transparent font-sans text-[11px] font-semibold text-lav hover:text-ink"
+            >
+              {modal.form.mode === 'simple' ? 'Usar expressão cron' : 'Usar campos guiados'}
+            </button>
           </div>
-          <input
-            value={modal.form.cronExpression}
-            onChange={(e) => setModal({ ...modal, form: { ...modal.form, cronExpression: e.target.value } })}
-            placeholder="0 20 * * FRI"
-            className="input-dark"
-          />
-          <div className="mt-1.5 font-sans text-[11.5px] text-dim">
-            Expressão cron de 5 campos: minuto, hora, dia do mês, mês, dia da semana.
-          </div>
+
+          {modal.form.mode === 'simple' ? (
+            <>
+              <div className="mb-2.5 flex gap-1.5">
+                {(
+                  [
+                    ['daily', 'Todo dia'],
+                    ['weekly', 'Dias da semana'],
+                    ['monthly', 'Dia do mês'],
+                  ] as [FriendlySchedule['frequency'], string][]
+                ).map(([freq, label]) => (
+                  <button
+                    key={freq}
+                    onClick={() =>
+                      setModal({
+                        ...modal,
+                        form: { ...modal.form, schedule: { ...modal.form.schedule, frequency: freq } },
+                      })
+                    }
+                    className={`flex-1 cursor-pointer rounded-lg border px-2 py-1.5 font-sans text-[12px] font-semibold ${
+                      modal.form.schedule.frequency === freq
+                        ? 'border-violet/50 bg-violet/15 text-ink'
+                        : 'border-[rgba(180,150,220,0.22)] bg-transparent text-muted hover:text-lav'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {modal.form.schedule.frequency === 'weekly' && (
+                <div className="mb-2.5 flex flex-wrap gap-1.5">
+                  {WEEKDAY_OPTIONS.map((d) => {
+                    const on = modal.form.schedule.days.includes(d.value)
+                    return (
+                      <button
+                        key={d.value}
+                        onClick={() =>
+                          setModal({
+                            ...modal,
+                            form: {
+                              ...modal.form,
+                              schedule: {
+                                ...modal.form.schedule,
+                                days: on
+                                  ? modal.form.schedule.days.filter((x) => x !== d.value)
+                                  : [...modal.form.schedule.days, d.value],
+                              },
+                            },
+                          })
+                        }
+                        className={`h-9 w-9 cursor-pointer rounded-full border font-sans text-[11.5px] font-bold ${
+                          on
+                            ? 'border-violet/50 bg-violet/15 text-ink'
+                            : 'border-[rgba(180,150,220,0.22)] bg-transparent text-muted hover:text-lav'
+                        }`}
+                      >
+                        {d.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {modal.form.schedule.frequency === 'monthly' && (
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={modal.form.schedule.dayOfMonth}
+                  onChange={(e) =>
+                    setModal({
+                      ...modal,
+                      form: {
+                        ...modal.form,
+                        schedule: {
+                          ...modal.form.schedule,
+                          dayOfMonth: Math.min(31, Math.max(1, Number(e.target.value) || 1)),
+                        },
+                      },
+                    })
+                  }
+                  className="input-dark mb-2.5"
+                />
+              )}
+
+              <input
+                type="time"
+                value={modal.form.schedule.time}
+                onChange={(e) =>
+                  setModal({ ...modal, form: { ...modal.form, schedule: { ...modal.form.schedule, time: e.target.value } } })
+                }
+                className="input-dark"
+              />
+              <div className="mt-1.5 font-sans text-[11.5px] text-dim">
+                {humanCron(buildCron(modal.form.schedule), 'America/Sao_Paulo')}
+              </div>
+            </>
+          ) : (
+            <>
+              <input
+                value={modal.form.advancedCron}
+                onChange={(e) => setModal({ ...modal, form: { ...modal.form, advancedCron: e.target.value } })}
+                placeholder="0 20 * * FRI"
+                className="input-dark"
+              />
+              <div className="mt-1.5 font-sans text-[11.5px] text-dim">
+                Expressão cron de 5 campos: minuto, hora, dia do mês, mês, dia da semana.
+              </div>
+            </>
+          )}
 
           {modal.form.type === 'ClaimMostVotedQuest' && (
             <>

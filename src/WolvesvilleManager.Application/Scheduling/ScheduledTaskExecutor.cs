@@ -81,7 +81,52 @@ public class ScheduledTaskExecutor
         if (dueTasks.Count > 0)
             await _db.SaveChangesAsync(ct);
 
+        await SnapshotMemberXpAsync(ct);
+
         return dueTasks.Count;
+    }
+
+    /// <summary>
+    /// Tira uma foto diária do XP de cada membro (base dos relatórios semanal/mensal).
+    /// Mora aqui porque este método é o único ponto executado com regularidade garantida
+    /// (BackgroundService + cron externo).
+    /// </summary>
+    private async Task SnapshotMemberXpAsync(CancellationToken ct)
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-20);
+        var clans = await _db.ClanRegistrations.ToListAsync(ct);
+
+        foreach (var reg in clans)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var hasRecent = await _db.MemberXpSnapshots
+                .AnyAsync(s => s.ClanRegistrationId == reg.Id && s.TakenAtUtc >= cutoff, ct);
+            if (hasRecent) continue;
+
+            try
+            {
+                var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
+                var members = await _api.GetMembersAsync(apiKey, reg.ClanId, ct);
+                var now = DateTime.UtcNow;
+                foreach (var m in members)
+                {
+                    _db.MemberXpSnapshots.Add(new MemberXpSnapshot
+                    {
+                        ClanRegistrationId = reg.Id,
+                        PlayerId = m.PlayerId,
+                        Username = m.Username,
+                        Xp = m.Xp,
+                        TakenAtUtc = now,
+                    });
+                }
+                await _db.SaveChangesAsync(ct);
+            }
+            catch (Exception ex) when (ex is WolvesvilleApiException or HttpRequestException or ApiKeyUnprotectException)
+            {
+                _logger.LogWarning("Snapshot de XP do clã {Clan} falhou: {Message}", reg.ClanName, ex.Message);
+            }
+        }
     }
 
     private async Task<(TaskExecutionOutcome, string)> ExecuteAsync(
