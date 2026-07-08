@@ -53,8 +53,10 @@ public class ScheduledTasksController : ControllerBase
     /// Gatilho externo do agendador: executa imediatamente as tarefas vencidas.
     /// Pensado para um cron gratuito (ex.: cron-job.org) acordar o app em hospedagem
     /// sem Always On. Protegido pelo X-Api-Key como todo o resto da API.
+    /// Aceita GET também para que o gatilho do cron-job.org seja um simples GET (método padrão dele).
     /// </summary>
     [HttpPost("api/scheduler/run")]
+    [HttpGet("api/scheduler/run")]
     public async Task<ActionResult<object>> RunNow(CancellationToken ct)
     {
         var executed = await _executor.ExecuteDueTasksAsync(ct);

@@ -109,6 +109,30 @@ public class FakeWolvesvilleClient : IWolvesvilleClient
 
     public Task<List<ClanLogEntry>> GetLogsAsync(string apiKey, string clanId, CancellationToken ct = default) =>
         Task.FromResult(new List<ClanLogEntry>());
+
+    public Task SetMemberFlairAsync(string apiKey, string clanId, string playerId, string flair, CancellationToken ct = default) =>
+        Task.CompletedTask;
+
+    public Task<PlayerProfile?> SearchPlayerAsync(string apiKey, string username, CancellationToken ct = default) =>
+        Task.FromResult<PlayerProfile?>(null);
+
+    public Task<PlayerProfile> GetPlayerAsync(string apiKey, string playerId, CancellationToken ct = default) =>
+        Task.FromResult(new PlayerProfile { Id = playerId });
+
+    public Task RedeemApiHatAsync(string apiKey, CancellationToken ct = default) =>
+        Task.CompletedTask;
+
+    public Task<List<RoleRotationEntry>> GetRoleRotationsAsync(string apiKey, CancellationToken ct = default) =>
+        Task.FromResult(new List<RoleRotationEntry>());
+
+    public Task<BattlePassSeason> GetBattlePassSeasonAsync(string apiKey, CancellationToken ct = default) =>
+        Task.FromResult(new BattlePassSeason());
+
+    public Task<List<ShopOffer>> GetShopOffersAsync(string apiKey, CancellationToken ct = default) =>
+        Task.FromResult(new List<ShopOffer>());
+
+    public Task<List<GameAnnouncement>> GetGameAnnouncementsAsync(string apiKey, CancellationToken ct = default) =>
+        Task.FromResult(new List<GameAnnouncement>());
 }
 
 /// <summary>Protetor de chaves "identidade" para testes.</summary>

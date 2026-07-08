@@ -1,6 +1,7 @@
 import { api } from '../api/client'
-import { ErrorBox, Loading, SectionTitle } from '../components/ui'
+import { ErrorBox, Loading, Pager, SectionTitle } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
+import { usePaged } from '../lib/paged'
 import { fmtDateTime, fmtNumber } from '../lib/format'
 
 // Rótulos das ações mais comuns; cai no valor cru se não reconhecer.
@@ -27,6 +28,8 @@ const LOG_ACTIONS: Record<string, string> = {
 export function Activity({ clanRegId }: { clanRegId: number }) {
   const ledger = useAsync(() => api.getLedger(clanRegId), [clanRegId])
   const logs = useAsync(() => api.getLogs(clanRegId), [clanRegId])
+  const ledgerPage = usePaged(ledger.data ?? [], 5)
+  const logsPage = usePaged(logs.data ?? [], 5)
 
   return (
     <div>
@@ -36,11 +39,12 @@ export function Activity({ clanRegId }: { clanRegId: number }) {
       ) : ledger.error ? (
         <ErrorBox message={ledger.error} onRetry={ledger.reload} />
       ) : (
-        <div className="list-card mb-9">
+        <div className="mb-9">
+        <div className="list-card">
           {ledger.data!.length === 0 && (
             <div className="px-5 py-5 font-sans text-[13px] text-muted">Nenhuma movimentação registrada.</div>
           )}
-          {ledger.data!.map((l, i) => (
+          {ledgerPage.slice.map((l, i) => (
             <div
               key={l.id ?? i}
               className="flex items-center justify-between border-b border-[rgba(180,150,220,0.07)] px-5 py-3.5 last:border-b-0"
@@ -69,6 +73,8 @@ export function Activity({ clanRegId }: { clanRegId: number }) {
             </div>
           ))}
         </div>
+        <Pager page={ledgerPage.page} pages={ledgerPage.pages} onChange={ledgerPage.setPage} />
+        </div>
       )}
 
       <SectionTitle>Log de auditoria</SectionTitle>
@@ -77,11 +83,12 @@ export function Activity({ clanRegId }: { clanRegId: number }) {
       ) : logs.error ? (
         <ErrorBox message={logs.error} onRetry={logs.reload} />
       ) : (
+        <div>
         <div className="list-card">
           {logs.data!.length === 0 && (
             <div className="px-5 py-5 font-sans text-[13px] text-muted">Nenhum registro de auditoria.</div>
           )}
-          {logs.data!.map((l, i) => (
+          {logsPage.slice.map((l, i) => (
             <div
               key={i}
               className="flex items-center justify-between border-b border-[rgba(180,150,220,0.07)] px-5 py-3.5 last:border-b-0"
@@ -94,6 +101,8 @@ export function Activity({ clanRegId }: { clanRegId: number }) {
               <div className="flex-none font-mono text-[11px] text-faint">{fmtDateTime(l.creationTime)}</div>
             </div>
           ))}
+        </div>
+        <Pager page={logsPage.page} pages={logsPage.pages} onChange={logsPage.setPage} />
         </div>
       )}
     </div>

@@ -1,9 +1,14 @@
 import type {
   AvailableQuest,
+  BattlePassSeason,
   BlocklistEntry,
   ChatMessage,
   ClanAnnouncement,
   ClanLogEntry,
+  GameAnnouncement,
+  PlayerProfile,
+  RoleRotationEntry,
+  ShopOffer,
   ClanInfo,
   ClanMember,
   CreateScheduledTaskRequest,
@@ -113,6 +118,11 @@ export const api = {
   listMembers: (clanId: number) => request<ClanMember[]>(`/api/clans/${clanId}/members`),
   getXpReport: (clanId: number, days: number) =>
     request<XpReport>(`/api/clans/${clanId}/members/xp-report?days=${days}`),
+  setFlair: (clanId: number, playerId: string, flair: string) =>
+    request<void>(`/api/clans/${clanId}/members/${playerId}/flair`, {
+      method: 'PUT',
+      body: JSON.stringify({ flair }),
+    }),
   getBlocklist: (clanId: number) =>
     request<BlocklistEntry[]>(`/api/clans/${clanId}/members/blocklist`),
   setParticipation: (clanId: number, playerId: string, participate: boolean) =>
@@ -153,6 +163,21 @@ export const api = {
     }),
   getLedger: (clanId: number) => request<LedgerEntry[]>(`/api/clans/${clanId}/ledger`),
   getLogs: (clanId: number) => request<ClanLogEntry[]>(`/api/clans/${clanId}/logs`),
+
+  // ---------- Jogo ----------
+  redeemApiHat: (clanId: number) =>
+    request<void>(`/api/clans/${clanId}/game/redeem-api-hat`, { method: 'POST' }),
+  searchPlayer: (clanId: number, username: string) =>
+    request<PlayerProfile>(
+      `/api/clans/${clanId}/game/players/search?username=${encodeURIComponent(username)}`,
+    ),
+  getRoleRotations: (clanId: number) =>
+    request<RoleRotationEntry[]>(`/api/clans/${clanId}/game/role-rotations`),
+  getBattlePass: (clanId: number) =>
+    request<BattlePassSeason>(`/api/clans/${clanId}/game/battle-pass`),
+  getShopOffers: (clanId: number) => request<ShopOffer[]>(`/api/clans/${clanId}/game/shop-offers`),
+  getGameAnnouncements: (clanId: number) =>
+    request<GameAnnouncement[]>(`/api/clans/${clanId}/game/announcements`),
 
   // ---------- Automações ----------
   listScheduledTasks: (clanId: number) =>

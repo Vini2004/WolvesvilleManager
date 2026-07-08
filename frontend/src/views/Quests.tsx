@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { api, ApiError } from '../api/client'
-import { ErrorBox, Loading, SectionTitle } from '../components/ui'
+import { ErrorBox, Loading, Pager, SectionTitle } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
+import { usePaged } from '../lib/paged'
 import { fmtDate, fmtNumber, questName, rewardsSummary } from '../lib/format'
 
 export function Quests({ clanRegId }: { clanRegId: number }) {
@@ -9,6 +10,9 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
   const history = useAsync(() => api.getQuestHistory(clanRegId), [clanRegId])
   const [busy, setBusy] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  // Chamados antes dos early returns abaixo para não quebrar a ordem dos hooks.
+  const availPage = usePaged(overview.data?.available ?? [], 5)
+  const historyPage = usePaged(history.data ?? [], 5)
 
   const run = async (name: string, confirmMsg: string, fn: () => Promise<void>) => {
     if (!window.confirm(confirmMsg)) return
@@ -59,8 +63,9 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
           Nenhuma missão disponível no momento.
         </div>
       ) : (
-        <div className="mb-9 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {data.available.map((aq) => {
+        <div className="mb-9">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {availPage.slice.map((aq) => {
             const q = aq.quest
             const gems = q.purchasableWithGems
             return (
@@ -130,6 +135,8 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
             )
           })}
         </div>
+        <Pager page={availPage.page} pages={availPage.pages} onChange={availPage.setPage} />
+        </div>
       )}
 
       <SectionTitle>Histórico</SectionTitle>
@@ -138,11 +145,12 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
       ) : history.error ? (
         <ErrorBox message={history.error} onRetry={history.reload} />
       ) : (
+        <div>
         <div className="list-card">
           {history.data!.length === 0 && (
             <div className="px-5 py-6 font-sans text-[13px] text-muted">Nenhuma missão concluída ainda.</div>
           )}
-          {history.data!.map((h, i) => (
+          {historyPage.slice.map((h, i) => (
             <div
               key={`${h.quest.id}-${i}`}
               className="flex items-center justify-between border-b border-[rgba(180,150,220,0.07)] px-5 py-4 last:border-b-0"
@@ -157,6 +165,8 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
               </div>
             </div>
           ))}
+        </div>
+        <Pager page={historyPage.page} pages={historyPage.pages} onChange={historyPage.setPage} />
         </div>
       )}
     </div>

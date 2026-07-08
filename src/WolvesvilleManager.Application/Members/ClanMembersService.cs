@@ -32,9 +32,14 @@ public class ClanMembersService
     public async Task<List<ClanMember>> ListAsync(int clanRegistrationId, CancellationToken ct = default)
     {
         var (reg, apiKey) = await _resolver.ResolveAsync(clanRegistrationId, ct);
-        var members = await _api.GetMembersDetailedAsync(apiKey, reg.ClanId, ct);
 
-        var info = await _api.GetClanInfoAsync(apiKey, reg.ClanId, ct);
+        // Membros e info do clã em paralelo — a listagem espera o mais lento dos dois, não a soma.
+        var membersTask = _api.GetMembersDetailedAsync(apiKey, reg.ClanId, ct);
+        var infoTask = _api.GetClanInfoAsync(apiKey, reg.ClanId, ct);
+        await Task.WhenAll(membersTask, infoTask);
+        var members = membersTask.Result;
+        var info = infoTask.Result;
+
         foreach (var m in members)
             m.IsLeader = m.PlayerId == info.LeaderId;
 
@@ -75,6 +80,17 @@ public class ClanMembersService
     {
         var (reg, apiKey) = await _resolver.ResolveAsync(clanRegistrationId, ct);
         await _api.UnblockMemberAsync(apiKey, reg.ClanId, playerId, ct);
+    }
+
+    public async Task SetFlairAsync(int clanRegistrationId, string playerId, string flair, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(flair))
+            throw new BusinessRuleException("Informe o flair.");
+        if (flair.Length > 50)
+            throw new BusinessRuleException("O flair pode ter no máximo 50 caracteres.");
+
+        var (reg, apiKey) = await _resolver.ResolveAsync(clanRegistrationId, ct);
+        await _api.SetMemberFlairAsync(apiKey, reg.ClanId, playerId, flair.Trim(), ct);
     }
 
     public async Task<List<BlocklistEntry>> GetBlocklistAsync(int clanRegistrationId, CancellationToken ct = default)

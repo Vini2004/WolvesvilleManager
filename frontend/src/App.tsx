@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, clearAccessKey } from './api/client'
 import type { RegisteredClan } from './api/types'
-import { MoonLogo, Particles } from './components/ui'
+import { ErrorBoundary, MoonLogo, Particles } from './components/ui'
 import { Login } from './views/Login'
 import { Dashboard } from './views/Dashboard'
 import { Quests } from './views/Quests'
@@ -10,6 +10,7 @@ import { Automations } from './views/Automations'
 import { Announcements } from './views/Announcements'
 import { Chat } from './views/Chat'
 import { Activity } from './views/Activity'
+import { Game } from './views/Game'
 import { RegisterClan } from './views/RegisterClan'
 
 type View =
@@ -19,6 +20,7 @@ type View =
   | 'announcements'
   | 'chat'
   | 'activity'
+  | 'game'
   | 'automations'
   | 'register'
 
@@ -29,6 +31,7 @@ const TITLES: Record<View, [string, string]> = {
   announcements: ['Anúncios', 'Publique avisos para todo o clã'],
   chat: ['Chat', 'Converse com o clã pelo bot'],
   activity: ['Atividade', 'Livro-razão e log de auditoria do clã'],
+  game: ['Jogo', 'Battle pass, loja, rotações e novidades oficiais'],
   automations: ['Automações', 'Tarefas agendadas via expressão cron'],
   register: ['Registrar clã', 'Conecte uma chave de API de clan bot'],
 }
@@ -69,6 +72,14 @@ const NAV_ICONS: Record<View, React.ReactNode> = {
   activity: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
       <path d="M3 12h4l2.5-7 4 14 2.5-7h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  game: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <rect x="2" y="7" width="20" height="11" rx="4" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M7 10.5v4M5 12.5h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="16" cy="11" r="1" fill="currentColor" />
+      <circle cx="18.5" cy="13.5" r="1" fill="currentColor" />
     </svg>
   ),
   automations: (
@@ -264,16 +275,17 @@ export default function App() {
                 para começar.
               </div>
             ) : (
-              <>
+              <ErrorBoundary>
                 {view === 'dashboard' && selectedClan && <Dashboard clanRegId={selectedClan.id} />}
                 {view === 'quests' && selectedClan && <Quests clanRegId={selectedClan.id} />}
                 {view === 'members' && selectedClan && <Members clanRegId={selectedClan.id} />}
                 {view === 'announcements' && selectedClan && <Announcements clanRegId={selectedClan.id} />}
                 {view === 'chat' && selectedClan && <Chat clanRegId={selectedClan.id} />}
                 {view === 'activity' && selectedClan && <Activity clanRegId={selectedClan.id} />}
+                {view === 'game' && selectedClan && <Game clanRegId={selectedClan.id} />}
                 {view === 'automations' && selectedClan && <Automations clanRegId={selectedClan.id} />}
                 {view === 'register' && <RegisterClan clans={clans} onChanged={loadClans} />}
-              </>
+              </ErrorBoundary>
             )}
           </div>
         </div>

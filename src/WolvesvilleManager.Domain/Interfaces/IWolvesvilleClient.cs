@@ -58,4 +58,20 @@ public interface IWolvesvilleClient
     // ---------- Ledger e logs ----------
     Task<List<LedgerEntry>> GetLedgerAsync(string apiKey, string clanId, CancellationToken ct = default);
     Task<List<ClanLogEntry>> GetLogsAsync(string apiKey, string clanId, CancellationToken ct = default);
+
+    // ---------- Membros: flair ----------
+    Task SetMemberFlairAsync(string apiKey, string clanId, string playerId, string flair, CancellationToken ct = default);
+
+    // ---------- Jogadores ----------
+    /// <summary>Busca por username exato; null quando não encontrado (404).</summary>
+    Task<PlayerProfile?> SearchPlayerAsync(string apiKey, string username, CancellationToken ct = default);
+    Task<PlayerProfile> GetPlayerAsync(string apiKey, string playerId, CancellationToken ct = default);
+
+    // ---------- Jogo (conteúdo global) ----------
+    /// <summary>Resgata o chapéu de avatar exclusivo da API para a conta dona da chave.</summary>
+    Task RedeemApiHatAsync(string apiKey, CancellationToken ct = default);
+    Task<List<RoleRotationEntry>> GetRoleRotationsAsync(string apiKey, CancellationToken ct = default);
+    Task<BattlePassSeason> GetBattlePassSeasonAsync(string apiKey, CancellationToken ct = default);
+    Task<List<ShopOffer>> GetShopOffersAsync(string apiKey, CancellationToken ct = default);
+    Task<List<GameAnnouncement>> GetGameAnnouncementsAsync(string apiKey, CancellationToken ct = default);
 }

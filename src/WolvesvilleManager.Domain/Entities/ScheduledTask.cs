@@ -38,6 +38,12 @@ public class ScheduledTask
 
     public DateTime? LastRunAtUtc { get; set; }
 
+    /// <summary>Id do gatilho de execução no cron-job.org (dispara no horário da tarefa); null se a integração está desligada.</summary>
+    public int? ExternalRunJobId { get; set; }
+
+    /// <summary>Id do gatilho de pré-aquecimento (dispara ~5 min antes, acorda app+banco); null quando não aplicável.</summary>
+    public int? ExternalWarmupJobId { get; set; }
+
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public List<TaskExecutionLog> ExecutionLogs { get; set; } = new();

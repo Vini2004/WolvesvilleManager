@@ -43,6 +43,14 @@ public class MembersController : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("{playerId}/flair")]
+    public async Task<IActionResult> SetFlair(
+        int id, string playerId, [FromBody] FlairRequest request, CancellationToken ct)
+    {
+        await _service.SetFlairAsync(id, playerId, request.Flair, ct);
+        return NoContent();
+    }
+
     [HttpPost("{playerId}/kick")]
     public async Task<IActionResult> Kick(
         int id, string playerId, [FromBody] KickRequest? request, CancellationToken ct)
@@ -67,4 +75,5 @@ public class MembersController : ControllerBase
 }
 
 public record ParticipationRequest(bool Participate);
+public record FlairRequest(string Flair);
 public record KickRequest(string? Reason);

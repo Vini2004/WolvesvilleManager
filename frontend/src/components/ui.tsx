@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { Component, useMemo, type ErrorInfo, type ReactNode } from 'react'
 
 /** Partículas roxas subindo, do design (fundo decorativo). */
 export function Particles() {
@@ -128,6 +128,64 @@ export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () =
           Tentar de novo
         </button>
       )}
+    </div>
+  )
+}
+
+/**
+ * Isola falhas de render: sem isto, uma exceção em qualquer view apaga o app inteiro (tela preta).
+ * Com o boundary, a tela quebrada mostra a mensagem do erro e as outras continuam funcionando.
+ */
+export class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('Erro de render na view:', error, info)
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <ErrorBox
+          message={`Algo quebrou nesta tela: ${this.state.error.message}`}
+          onRetry={() => this.setState({ error: null })}
+        />
+      )
+    }
+    return this.props.children
+  }
+}
+
+/** Navegação de páginas para listas paginadas; some quando há uma página só. */
+export function Pager({
+  page,
+  pages,
+  onChange,
+}: {
+  page: number
+  pages: number
+  onChange: (p: number) => void
+}) {
+  if (pages <= 1) return null
+  return (
+    <div className="flex items-center justify-center gap-3 pt-4 font-sans text-[12.5px] text-muted">
+      <button onClick={() => onChange(page - 1)} disabled={page === 0} className="btn-ghost disabled:opacity-40">
+        Anterior
+      </button>
+      <span>
+        Página {page + 1} de {pages}
+      </span>
+      <button
+        onClick={() => onChange(page + 1)}
+        disabled={page >= pages - 1}
+        className="btn-ghost disabled:opacity-40"
+      >
+        Próxima
+      </button>
     </div>
   )
 }

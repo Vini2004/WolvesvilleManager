@@ -141,19 +141,19 @@ export function Members({ clanRegId }: { clanRegId: number }) {
       </div>
 
       <div className="list-card overflow-x-auto">
-        <div className="box-border flex min-w-[820px] items-center border-b border-[rgba(180,150,220,0.1)] px-5 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.5px] text-faint">
+        <div className="box-border flex min-w-[870px] items-center border-b border-[rgba(180,150,220,0.1)] px-5 py-3 font-sans text-[11px] font-bold uppercase tracking-[0.5px] text-faint">
           <div className="min-w-[220px] flex-1">Jogador</div>
-          <div className="w-20 flex-none">Nível</div>
           <div className="w-[110px] flex-none">XP no clã</div>
+          <div className="w-20 flex-none">Nível</div>
           <div className="w-[150px] flex-none">Participação</div>
-          <div className="w-[180px] flex-none text-right">Ações</div>
+          <div className="w-[230px] flex-none text-right">Ações</div>
         </div>
         {list.map((m, i) => {
           const st = statusOf(m.playerStatus ?? m.status)
           return (
             <div
               key={m.playerId}
-              className="box-border flex min-w-[820px] items-center border-b border-[rgba(180,150,220,0.07)] px-5 py-4 last:border-b-0"
+              className="box-border flex min-w-[870px] items-center border-b border-[rgba(180,150,220,0.07)] px-5 py-4 last:border-b-0"
             >
               <div className="flex min-w-[220px] flex-1 items-center gap-3">
                 <Avatar name={m.username} index={i} />
@@ -176,8 +176,8 @@ export function Members({ clanRegId }: { clanRegId: number }) {
                   </div>
                 </div>
               </div>
+              <div className="w-[110px] flex-none font-mono text-[13px] text-gold">{fmtNumber(m.xp)}</div>
               <div className="w-20 flex-none font-mono text-[13px] text-lav">{m.level}</div>
-              <div className="w-[110px] flex-none font-mono text-[13px] text-muted">{fmtNumber(m.xp)}</div>
               <div className="w-[150px] flex-none">
                 <Toggle
                   on={m.participateInClanQuests ?? false}
@@ -189,7 +189,18 @@ export function Members({ clanRegId }: { clanRegId: number }) {
                   }
                 />
               </div>
-              <div className="flex w-[180px] flex-none justify-end gap-2">
+              <div className="flex w-[230px] flex-none justify-end gap-2">
+                <button
+                  disabled={busy !== null}
+                  onClick={() => {
+                    const flair = window.prompt(`Flair de ${m.username} (ex.: Squid):`)
+                    if (flair && flair.trim())
+                      run(`flair-${m.playerId}`, () => api.setFlair(clanRegId, m.playerId, flair.trim()))
+                  }}
+                  className="btn-ghost"
+                >
+                  Flair
+                </button>
                 <button
                   disabled={busy !== null}
                   onClick={() => {

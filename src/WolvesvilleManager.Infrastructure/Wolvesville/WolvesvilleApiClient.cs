@@ -122,6 +122,43 @@ public class WolvesvilleApiClient : IWolvesvilleClient
     public Task<List<ClanLogEntry>> GetLogsAsync(string apiKey, string clanId, CancellationToken ct = default) =>
         GetAsync<List<ClanLogEntry>>(apiKey, $"/clans/{clanId}/logs", ct);
 
+    public Task SetMemberFlairAsync(string apiKey, string clanId, string playerId, string flair, CancellationToken ct = default) =>
+        SendAsync(apiKey, HttpMethod.Put, $"/clans/{clanId}/members/{playerId}/flair", new { flair }, ct);
+
+    public async Task<PlayerProfile?> SearchPlayerAsync(string apiKey, string username, CancellationToken ct = default)
+    {
+        try
+        {
+            return await GetAsync<PlayerProfile>(
+                apiKey, $"/players/search?username={Uri.EscapeDataString(username)}", ct);
+        }
+        catch (WolvesvilleApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    public Task<PlayerProfile> GetPlayerAsync(string apiKey, string playerId, CancellationToken ct = default) =>
+        GetAsync<PlayerProfile>(apiKey, $"/players/{playerId}", ct);
+
+    public Task RedeemApiHatAsync(string apiKey, CancellationToken ct = default) =>
+        SendAsync(apiKey, HttpMethod.Post, "/items/redeemApiHat", null, ct);
+
+    public Task<List<RoleRotationEntry>> GetRoleRotationsAsync(string apiKey, CancellationToken ct = default) =>
+        GetAsync<List<RoleRotationEntry>>(apiKey, "/roleRotations", ct);
+
+    public Task<BattlePassSeason> GetBattlePassSeasonAsync(string apiKey, CancellationToken ct = default) =>
+        GetAsync<BattlePassSeason>(apiKey, "/battlePass/season", ct);
+
+    public Task<List<ShopOffer>> GetShopOffersAsync(string apiKey, CancellationToken ct = default) =>
+        GetAsync<List<ShopOffer>>(apiKey, "/shop/activeOffers", ct);
+
+    public async Task<List<GameAnnouncement>> GetGameAnnouncementsAsync(string apiKey, CancellationToken ct = default)
+    {
+        var response = await GetAsync<GameAnnouncementsResponse>(apiKey, "/announcements", ct);
+        return response.Announcements;
+    }
+
     // ---------- Infraestrutura ----------
 
     private async Task<T> GetAsync<T>(string apiKey, string path, CancellationToken ct)

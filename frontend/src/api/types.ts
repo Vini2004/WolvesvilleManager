@@ -170,3 +170,49 @@ export interface ClanLogEntry {
   targetPlayerUsername: string | null
   creationTime: string | null
 }
+
+// Campos numéricos com -1 = escondidos pela privacidade do jogador.
+export interface PlayerProfile {
+  id: string
+  username: string
+  personalMessage: string | null
+  level: number
+  status: string | null
+  clanId: string | null
+  lastOnline: string | null
+  rosesReceivedCount: number | null
+  profileIconColor: string | null
+  gameStats: {
+    totalWinCount: number | null
+    totalLoseCount: number | null
+    totalTieCount: number | null
+    totalPlayTimeInMinutes: number | null
+  } | null
+}
+
+export interface RoleRotationEntry {
+  gameMode: string | null
+  // Cru da API: [{ roleRotation: { roles: [[{ probability, role }]] }, probability }]
+  roleRotations: { roleRotation: { roles: { probability: number; role: string }[][] } }[] | null
+}
+
+export interface BattlePassSeason {
+  number: number | null
+  startTime: string | null
+  durationInDays: number | null
+  xpPerReward: number | null
+}
+
+export interface ShopOffer {
+  type: string | null
+  costInGems: number | null
+  promoImageUrl: string | null
+  expireDate: string | null
+}
+
+export interface GameAnnouncement {
+  content: string | null
+  timestamp: string | null
+  author: { username: string | null } | null
+  attachments: { filename: string | null; url: string | null }[] | null
+}
