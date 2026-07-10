@@ -15,13 +15,13 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        // EnableRetryOnFailure: o Azure SQL free é serverless e auto-pausa; a primeira conexão
-        // depois da pausa precisa "acordar" o banco (~30-60s) e falha com erros transitórios.
+        // EnableRetryOnFailure: o Neon Postgres é serverless e auto-suspende; a primeira conexão
+        // depois da suspensão precisa "acordar" o banco (~1-5s) e pode falhar com erro transitório.
         // A estratégia de retry absorve esse cold-resume em vez de estourar (evita o 500.30 no boot).
         services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlServer(
+            options.UseNpgsql(
                 configuration.GetConnectionString("Default"),
-                sql => sql.EnableRetryOnFailure(maxRetryCount: 6, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null)));
+                npgsql => npgsql.EnableRetryOnFailure(maxRetryCount: 6, maxRetryDelay: TimeSpan.FromSeconds(10), errorCodesToAdd: null)));
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
 
         services.AddScoped<IApiKeyProtector, ApiKeyProtector>();
