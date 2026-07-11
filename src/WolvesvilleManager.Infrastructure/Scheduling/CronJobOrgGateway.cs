@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
@@ -89,7 +90,7 @@ public sealed class CronJobOrgGateway : ICronTriggerGateway
         // Job já existe → PATCH; se sumiu (404), recria. Sem id → cria (PUT).
         if (jobId is int id)
         {
-            using var patch = await _http.PatchAsJsonAsync($"/jobs/{id}", payload, Json, ct);
+            using var patch = await _http.PatchAsync($"/jobs/{id}", JobContent(payload), ct);
             if (patch.StatusCode != HttpStatusCode.NotFound)
             {
                 patch.EnsureSuccessStatusCode();
@@ -98,10 +99,19 @@ public sealed class CronJobOrgGateway : ICronTriggerGateway
             _logger.LogWarning("Job {JobId} não existe mais no cron-job.org — recriando.", id);
         }
 
-        using var put = await _http.PutAsJsonAsync("/jobs", payload, Json, ct);
+        using var put = await _http.PutAsync("/jobs", JobContent(payload), ct);
         put.EnsureSuccessStatusCode();
         var body = await put.Content.ReadFromJsonAsync<CreateJobResponse>(Json, ct);
         return body?.JobId;
+    }
+
+    // A API do cron-job.org devolve 400 se o Content-Type vier com "; charset=utf-8"
+    // (o que PutAsJsonAsync/PatchAsJsonAsync adicionam por padrão). Mandamos "application/json" puro.
+    private static JsonContent JobContent(object payload)
+    {
+        var content = JsonContent.Create(payload, options: Json);
+        content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        return content;
     }
 
     private async Task DeleteJobAsync(int jobId, CancellationToken ct)
