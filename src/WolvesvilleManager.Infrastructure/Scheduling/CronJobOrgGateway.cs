@@ -90,7 +90,7 @@ public sealed class CronJobOrgGateway : ICronTriggerGateway
         // Job já existe → PATCH; se sumiu (404), recria. Sem id → cria (PUT).
         if (jobId is int id)
         {
-            using var patch = await _http.PatchAsync($"/jobs/{id}", JobContent(payload), ct);
+            using var patch = await SendWithRetryAsync(HttpMethod.Patch, $"/jobs/{id}", payload, ct);
             if (patch.StatusCode != HttpStatusCode.NotFound)
             {
                 patch.EnsureSuccessStatusCode();
@@ -99,10 +99,28 @@ public sealed class CronJobOrgGateway : ICronTriggerGateway
             _logger.LogWarning("Job {JobId} não existe mais no cron-job.org — recriando.", id);
         }
 
-        using var put = await _http.PutAsync("/jobs", JobContent(payload), ct);
+        using var put = await SendWithRetryAsync(HttpMethod.Put, "/jobs", payload, ct);
         put.EnsureSuccessStatusCode();
         var body = await put.Content.ReadFromJsonAsync<CreateJobResponse>(Json, ct);
         return body?.JobId;
+    }
+
+    // A API do cron-job.org limita a taxa (429) — como cada tarefa cria 2 jobs (execução + pré-aquecer)
+    // em sequência, o segundo request costuma bater no limite. Repete respeitando o Retry-After
+    // (ou backoff curto), poucas vezes, para o par de jobs ser criado por completo.
+    private async Task<HttpResponseMessage> SendWithRetryAsync(HttpMethod method, string uri, object payload, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            var res = await _http.SendAsync(
+                new HttpRequestMessage(method, uri) { Content = JobContent(payload) }, ct);
+            if (res.StatusCode != HttpStatusCode.TooManyRequests || attempt >= 4)
+                return res;
+
+            var wait = res.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(1.5 * (attempt + 1));
+            res.Dispose();
+            await Task.Delay(wait, ct);
+        }
     }
 
     // A API do cron-job.org devolve 400 se o Content-Type vier com "; charset=utf-8"
