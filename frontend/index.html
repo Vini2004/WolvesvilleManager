@@ -11,7 +11,18 @@
       href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <style>body { margin: 0; background: #0d0b14; }</style>
+    <style>
+      body { margin: 0; background: #0d0b14; }
+      :root[data-theme='hogwarts'] body { background: #140f09; }
+    </style>
+    <script>
+      // Aplica tema/casa salvos antes da 1ª pintura, pra não piscar o tema padrão.
+      try {
+        var r = document.documentElement
+        r.dataset.theme = localStorage.getItem('wvm.theme') === 'hogwarts' ? 'hogwarts' : 'default'
+        r.dataset.house = localStorage.getItem('wvm.house') || 'gryffindor'
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

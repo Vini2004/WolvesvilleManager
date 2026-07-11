@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, ApiError, clearAccessKey } from './api/client'
 import type { RegisteredClan } from './api/types'
-import { ErrorBoundary, MoonLogo, Particles } from './components/ui'
+import { Brand, ErrorBoundary, MoonLogo, Particles, ThemeMenu } from './components/ui'
+import { useTheme } from './lib/theme'
 import { Login } from './views/Login'
 import { Dashboard } from './views/Dashboard'
 import { Quests } from './views/Quests'
@@ -108,6 +109,7 @@ export default function App() {
   })
   const [view, setView] = useState<View>('dashboard')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const { isHogwarts } = useTheme()
 
   const loadClans = useCallback(async () => {
     const list = await api.listClans()
@@ -183,7 +185,7 @@ export default function App() {
         }`}
       >
         <div className="mb-5 flex items-center gap-3 border-b border-[rgba(180,150,220,0.1)] px-1 pb-7">
-          <MoonLogo size={36} />
+          <Brand size={36} />
           <div className="min-w-0">
             <div className="truncate font-serif text-base font-semibold leading-tight tracking-[0.2px] text-ink">
               {selectedClan?.clanName ?? 'Wolvesville'}
@@ -219,7 +221,7 @@ export default function App() {
                 className={`flex cursor-pointer items-center gap-3 rounded-[10px] px-3.5 py-2.5 font-sans text-[13.5px] font-semibold transition-colors ${
                   active ? 'bg-violet/15 text-ink' : 'text-muted hover:text-lav'
                 }`}
-                style={active ? { boxShadow: 'inset 2px 0 0 #8b5cf6' } : undefined}
+                style={active ? { boxShadow: 'inset 2px 0 0 var(--color-violet)' } : undefined}
               >
                 {NAV_ICONS[v]}
                 <span>{TITLES[v][0]}</span>
@@ -256,16 +258,19 @@ export default function App() {
               <div className="mt-0.5 hidden font-sans text-[13px] text-muted sm:block">{subtitle}</div>
             </div>
           </div>
-          {selectedClan && (
-            <div className="flex-none rounded-[20px] border border-[rgba(217,164,65,0.35)] bg-gold/10 px-3 py-1.5 font-sans text-[11.5px] font-bold tracking-[0.4px] text-warn">
-              {selectedClan.clanTag ? `#${selectedClan.clanTag} · ` : ''}
-              {selectedClan.clanName.toUpperCase()}
-            </div>
-          )}
+          <div className="flex flex-none items-center gap-2.5">
+            <ThemeMenu />
+            {selectedClan && (
+              <div className="rounded-[20px] border border-[rgba(217,164,65,0.35)] bg-gold/10 px-3 py-1.5 font-sans text-[11.5px] font-bold tracking-[0.4px] text-warn">
+                {selectedClan.clanTag ? `#${selectedClan.clanTag} · ` : ''}
+                {selectedClan.clanName.toUpperCase()}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 pb-16 pt-6 md:px-10 md:pt-9">
-          <div key={view} style={{ animation: 'fadeSlideIn 0.4s ease' }}>
+          <div key={view + (isHogwarts ? 'h' : 'd')} style={{ animation: isHogwarts ? 'inkReveal 0.6s ease' : 'fadeSlideIn 0.4s ease' }}>
             {needsClan && selectedClan == null ? (
               <div className="card p-7 font-sans text-[13.5px] text-muted">
                 Nenhum clã registrado ainda.{' '}

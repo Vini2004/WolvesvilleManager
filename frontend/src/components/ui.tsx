@@ -1,7 +1,14 @@
-import { Component, useMemo, type ErrorInfo, type ReactNode } from 'react'
+import { Component, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react'
+import { HOUSES, useTheme, type HouseId } from '../lib/theme'
 
-/** Partículas roxas subindo, do design (fundo decorativo). */
+/** Fundo decorativo. No tema padrão, partículas roxas; no Hogwarts, o Grande Salão. */
 export function Particles() {
+  const { isHogwarts } = useTheme()
+  return isHogwarts ? <GreatHall /> : <PurpleDust />
+}
+
+/** Partículas roxas subindo (tema padrão). */
+function PurpleDust() {
   const seed = useMemo(
     () =>
       Array.from({ length: 14 }, () => ({
@@ -32,6 +39,126 @@ export function Particles() {
   )
 }
 
+/** Cenário Hogwarts: velas flutuantes, faíscas de varinha e a silhueta do castelo ao fundo. */
+function GreatHall() {
+  const candles = useMemo(
+    () =>
+      Array.from({ length: 9 }, (_, i) => ({
+        left: 5 + ((i * 11.3) % 92),
+        top: 8 + ((i * 29) % 60),
+        floatDur: 5 + (i % 4),
+        flickerDur: 2 + (i % 2) * 0.6,
+        delay: i * 0.5,
+        scale: 0.8 + ((i * 7) % 5) / 10,
+      })),
+    [],
+  )
+  const sparks = useMemo(
+    () =>
+      Array.from({ length: 22 }, (_, i) => ({
+        left: (i * 4.6) % 100,
+        sx: (i % 2 ? 1 : -1) * (18 + i * 3),
+        dur: 5 + (i % 5),
+        delay: i * 0.35,
+      })),
+    [],
+  )
+  return (
+    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      <Castle />
+      {/* teto encantado: brilho quente descendo do topo */}
+      <div
+        className="absolute inset-x-0 top-0 h-1/2"
+        style={{ background: 'radial-gradient(120% 90% at 50% -20%, rgba(212,165,63,0.10), transparent 60%)' }}
+      />
+      {candles.map((c, i) => (
+        <div
+          key={`c${i}`}
+          className="absolute"
+          style={{
+            left: `${c.left}%`,
+            top: `${c.top}%`,
+            transform: `scale(${c.scale})`,
+            animation: `candleFloat ${c.floatDur}s ease-in-out ${c.delay}s infinite`,
+          }}
+        >
+          <div className="mx-auto h-4 w-[3px] rounded-sm" style={{ background: 'linear-gradient(#3a2a16, #e9d9b8)' }} />
+          <div
+            className="mx-auto -mt-1"
+            style={{
+              width: 8,
+              height: 12,
+              borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
+              background: 'radial-gradient(circle, #ffe9a8, #f2a53d 70%, transparent)',
+              boxShadow: '0 0 12px 4px rgba(255,190,90,0.55)',
+              animation: `candleFlicker ${c.flickerDur}s ease-in-out infinite`,
+            }}
+          />
+        </div>
+      ))}
+      {sparks.map((s, i) => (
+        <div
+          key={`s${i}`}
+          className="absolute rounded-full"
+          style={
+            {
+              left: `${s.left}%`,
+              bottom: -10,
+              width: 3,
+              height: 3,
+              background: 'var(--color-gold)',
+              boxShadow: '0 0 6px var(--color-gold)',
+              '--sx': `${s.sx}px`,
+              animation: `sparkleDrift ${s.dur}s ease-out ${s.delay}s infinite`,
+            } as React.CSSProperties
+          }
+        />
+      ))}
+    </div>
+  )
+}
+
+/** Silhueta estilizada do castelo de Hogwarts, com janelas acesas, fixada na base da tela. */
+function Castle() {
+  return (
+    <svg
+      viewBox="0 0 1200 300"
+      preserveAspectRatio="xMidYMax slice"
+      className="absolute inset-x-0 bottom-0 h-[46%] w-full opacity-[0.55]"
+      style={{ filter: 'drop-shadow(0 0 30px rgba(0,0,0,0.6))' }}
+    >
+      <defs>
+        <linearGradient id="castle" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#0f0a05" />
+          <stop offset="1" stopColor="#1c1206" />
+        </linearGradient>
+      </defs>
+      <path
+        fill="url(#castle)"
+        d="M0 300 V210 h60 v-40 h30 v40 h50 v-70 l25-30 25 30 v70 h60 v-120 l30-34 30 34 v120 h70 v-60 h26 v-40 h28 v40 h26 v60 h80 v-96 l34-40 34 40 v96 h70 v-150 l40-46 40 46 v150 h74 v-70 h28 v-44 h30 v44 h28 v70 h70 v-110 l32-38 32 38 v110 h64 v-46 h26 v-34 h28 v34 h26 v46 h70 v-64 l24-28 24 28 v64 h60 V300 Z"
+      />
+      {/* janelas acesas */}
+      {[
+        [175, 175], [175, 200], [305, 150], [305, 185], [305, 220],
+        [590, 130], [590, 165], [590, 200], [590, 235], [608, 148], [572, 148],
+        [872, 165], [872, 200], [1010, 170], [1010, 205],
+      ].map(([x, y], i) => (
+        <rect
+          key={i}
+          x={x - 3}
+          y={y}
+          width="6"
+          height="10"
+          rx="1.5"
+          fill="#f2b64a"
+          opacity={0.75}
+          style={{ animation: `candleFlicker ${2.4 + (i % 3) * 0.5}s ease-in-out ${i * 0.2}s infinite` }}
+        />
+      ))}
+    </svg>
+  )
+}
+
 /** Lua crescente com brilho pulsante, marca do app. */
 export function MoonLogo({ size = 36, holeBg = '#150f22' }: { size?: number; holeBg?: string }) {
   const hole = size * 0.83
@@ -54,6 +181,156 @@ export function MoonLogo({ size = 36, holeBg = '#150f22' }: { size?: number; hol
         className="absolute rounded-full"
         style={{ top: size * 0.055, left: size * 0.34, width: hole, height: hole, background: holeBg }}
       />
+    </div>
+  )
+}
+
+/** Emblemas heráldicos por casa (artefatos canônicos: espada, serpente, águia, taça). */
+const HOUSE_EMBLEM: Record<HouseId, ReactNode> = {
+  gryffindor: (
+    <g stroke="#f3e6c8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <path d="M20 9 V26" />
+      <path d="M15 24 H25" />
+      <path d="M20 26 V30" />
+      <circle cx="20" cy="31.5" r="1.5" fill="#f3e6c8" stroke="none" />
+    </g>
+  ),
+  slytherin: (
+    <g stroke="#f3e6c8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <path d="M24 12 C16 12 16 18.5 21 20.5 C26.5 22.5 24.5 29 16.5 29" />
+      <circle cx="24.5" cy="11.5" r="1.4" fill="#f3e6c8" stroke="none" />
+    </g>
+  ),
+  ravenclaw: (
+    <g stroke="#f3e6c8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <path d="M10 16 Q20 23 20 15 Q20 23 30 16" />
+      <path d="M20 21 V28" />
+      <path d="M20 28 L23 30" />
+    </g>
+  ),
+  hufflepuff: (
+    <g stroke="#f3e6c8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <path d="M14.5 13 H25.5 L24 21 H16 Z" />
+      <path d="M20 21 V27" />
+      <path d="M15.5 28 H24.5" />
+    </g>
+  ),
+}
+
+/** Brasão/selo da casa: escudo heráldico com brilho pulsante. Substitui o logo no tema Hogwarts. */
+export function HouseCrest({ size = 36 }: { size?: number }) {
+  const { house, houseColor } = useTheme()
+  return (
+    <div className="relative flex-none" style={{ width: size, height: size }}>
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{ background: houseColor, filter: 'blur(11px)', animation: 'sealGlow 3.5s ease-in-out infinite' }}
+      />
+      <svg viewBox="0 0 40 44" width={size} height={size} className="relative">
+        <defs>
+          <linearGradient id={`shield-${house}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor={houseColor} />
+            <stop offset="1" stopColor="#241708" />
+          </linearGradient>
+        </defs>
+        <path
+          d="M20 2 L36 7 V22 C36 33 29 40 20 42 C11 40 4 33 4 22 V7 Z"
+          fill={`url(#shield-${house})`}
+          stroke="#d4a53f"
+          strokeWidth="1.6"
+        />
+        <path d="M20 2 L36 7 V22 C36 27 33.5 31 30 34 L20 6 Z" fill="rgba(255,255,255,0.07)" />
+        {HOUSE_EMBLEM[house]}
+      </svg>
+    </div>
+  )
+}
+
+/** A marca do app: lua no tema padrão, brasão da casa no tema Hogwarts. */
+export function Brand({ size = 36 }: { size?: number }) {
+  const { isHogwarts } = useTheme()
+  return isHogwarts ? <HouseCrest size={size} /> : <MoonLogo size={size} />
+}
+
+/** Botão de faísca no header que abre o seletor de tema (Padrão/Hogwarts) e de casa. */
+export function ThemeMenu() {
+  const { theme, house, isHogwarts, setTheme, setHouse } = useTheme()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const seg = (active: boolean) =>
+    `flex-1 rounded-lg px-2.5 py-2 font-sans text-[12.5px] font-semibold transition-colors ${
+      active
+        ? 'border border-[rgba(201,164,79,0.3)] bg-white/5 text-ink'
+        : 'border border-[rgba(180,150,220,0.22)] bg-transparent text-lav hover:bg-white/5'
+    }`
+
+  return (
+    <div className="relative flex-none" ref={ref}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-label="Tema"
+        className="flex cursor-pointer items-center rounded-lg border border-[rgba(180,150,220,0.22)] bg-transparent p-2 text-lav transition-colors hover:text-ink"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8L12 2z" fill="currentColor" />
+          <circle cx="19" cy="18" r="1.6" fill="currentColor" />
+          <circle cx="5" cy="19" r="1.1" fill="currentColor" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          className="card absolute right-0 top-[calc(100%+8px)] z-50 w-60 p-4"
+          style={{ animation: 'fadeSlideIn 0.18s ease' }}
+        >
+          <div className="field-label mb-2.5">Tema</div>
+          <div className="mb-4 flex gap-2">
+            <button className={seg(theme === 'default')} onClick={() => setTheme('default')}>
+              Padrão
+            </button>
+            <button className={seg(isHogwarts)} onClick={() => setTheme('hogwarts')}>
+              Hogwarts
+            </button>
+          </div>
+          {isHogwarts && (
+            <>
+              <div className="field-label mb-2.5">Casa</div>
+              <div className="grid grid-cols-2 gap-2">
+                {HOUSES.map((h) => {
+                  const active = house === h.id
+                  return (
+                    <button
+                      key={h.id}
+                      onClick={() => setHouse(h.id)}
+                      className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 font-sans text-[12px] font-semibold transition-colors"
+                      style={{
+                        border: `1px solid ${active ? h.color : 'rgba(201,164,79,0.22)'}`,
+                        background: active ? `${h.color}22` : 'transparent',
+                        color: active ? '#f3e6c8' : 'var(--color-lav)',
+                      }}
+                    >
+                      <span
+                        className="h-2.5 w-2.5 flex-none rounded-full"
+                        style={{ background: h.color }}
+                      />
+                      {h.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
