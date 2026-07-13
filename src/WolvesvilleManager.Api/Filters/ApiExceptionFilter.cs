@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using WolvesvilleManager.Application.Common;
@@ -29,6 +30,8 @@ public class ApiExceptionFilter : IExceptionFilter
                 (StatusCodes.Status429TooManyRequests, "Limite de requisições da API do Wolvesville"),
             WolvesvilleApiException => (StatusCodes.Status502BadGateway, "Erro na API do Wolvesville"),
             HttpRequestException => (StatusCodes.Status502BadGateway, "Falha de comunicação com a API do Wolvesville"),
+            // A API do Wolvesville é fracamente tipada; um formato inesperado não deve virar 500 opaco.
+            JsonException => (StatusCodes.Status502BadGateway, "Resposta em formato inesperado da API do Wolvesville"),
             _ => (0, string.Empty),
         };
 

@@ -14,7 +14,15 @@ namespace WolvesvilleManager.Infrastructure.Wolvesville;
 /// </summary>
 public class WolvesvilleApiClient : IWolvesvilleClient
 {
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
+
+    private static JsonSerializerOptions CreateJsonOptions()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        // A API às vezes devolve número onde esperamos texto (status, cores…); tolera em vez de quebrar.
+        options.Converters.Add(new TolerantStringConverter());
+        return options;
+    }
 
     private readonly HttpClient _http;
 
