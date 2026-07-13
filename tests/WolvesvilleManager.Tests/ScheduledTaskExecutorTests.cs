@@ -44,6 +44,9 @@ public class ScheduledTaskExecutorTests
 
     private static ClanQuest Quest(string id) => new() { Id = id, PromoImageUrl = $"https://cdn/{id}.png" };
 
+    private static ClanQuest QuestWithPromo(string id, string promoImageUrl) =>
+        new() { Id = id, PromoImageUrl = promoImageUrl };
+
     private static JsonElement VotesJson(string json) => JsonDocument.Parse(json).RootElement;
 
     [Fact]
@@ -258,6 +261,36 @@ public class ScheduledTaskExecutorTests
         Assert.False(api.ClaimedExtraTime);
         var log = Assert.Single(db.TaskExecutionLogs);
         Assert.Equal(TaskExecutionOutcome.Skipped, log.Outcome);
+    }
+
+    [Fact]
+    public async Task ClaimSpecificQuest_IdRotacionadoENomeTraduzido_CasaPelaImagemPromocional()
+    {
+        // Cenário real: entre o cadastro e a execução a oferta rotacionou — o Id salvo já não
+        // existe e o nome guardado é o traduzido (não bate com o DisplayName cru). A missão, porém,
+        // continua disponível sob outro Id/arquivo, e deve ser casada pela identidade da imagem.
+        using var db = CreateDb();
+        var task = SeedDueTask(db, ScheduledTaskType.ClaimSpecificQuest);
+        task.TargetQuestId = "offer-antigo-1";
+        task.TargetQuestName = "Anjo Caído"; // traduzido — não casa com o DisplayName cru
+        task.TargetQuestPromoImageUrl = "https://cdn/promo/fallen-angel-111.png";
+        db.SaveChanges();
+        var api = new FakeWolvesvilleClient
+        {
+            ActiveQuest = null,
+            AvailableQuests =
+            [
+                QuestWithPromo("offer-novo-9", "https://cdn/promo/settlers-777.png"),
+                // Mesma missão, novo Id e novo sufixo numérico no arquivo → normaliza para "fallenangel".
+                QuestWithPromo("offer-novo-42", "https://cdn/promo/fallen-angel-222.png"),
+            ],
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        Assert.Equal("offer-novo-42", api.ClaimedQuestId);
+        var log = Assert.Single(db.TaskExecutionLogs);
+        Assert.Equal(TaskExecutionOutcome.Success, log.Outcome);
     }
 
     [Fact]

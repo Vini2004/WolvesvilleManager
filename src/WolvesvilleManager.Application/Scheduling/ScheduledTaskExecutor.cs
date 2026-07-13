@@ -186,7 +186,9 @@ public class ScheduledTaskExecutor
     private async Task<(TaskExecutionOutcome, string)> ClaimSpecificQuestAsync(
         ScheduledTask task, string apiKey, string clanId, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(task.TargetQuestId) && string.IsNullOrWhiteSpace(task.TargetQuestName))
+        if (string.IsNullOrWhiteSpace(task.TargetQuestId) &&
+            string.IsNullOrWhiteSpace(task.TargetQuestName) &&
+            string.IsNullOrWhiteSpace(task.TargetQuestPromoImageUrl))
             return (TaskExecutionOutcome.Failed, "Nenhuma missão específica foi configurada nesta automação.");
 
         var active = await GetActiveQuestSafeAsync(apiKey, clanId, ct);
@@ -197,10 +199,13 @@ public class ScheduledTaskExecutor
         if (available.Count == 0)
             return (TaskExecutionOutcome.Skipped, "Não há missões disponíveis no momento.");
 
-        // Casa por Id (preferível) e, como as ofertas rotacionam e os ids podem variar,
-        // cai para o nome legível guardado na automação.
+        // As ofertas rotacionam: o Id e o nome do arquivo mudam entre cadastro e execução.
+        // Casa primeiro pelo Id (quando ainda válido), depois pela identidade estável da imagem
+        // promocional (normalizada) e, por último, pelo nome legível — nessa ordem de confiança.
+        var targetKey = QuestMatchKey.Normalize(task.TargetQuestPromoImageUrl);
         var target =
             available.FirstOrDefault(q => !string.IsNullOrEmpty(task.TargetQuestId) && q.Id == task.TargetQuestId)
+            ?? available.FirstOrDefault(q => targetKey != null && QuestMatchKey.Normalize(q.PromoImageUrl) == targetKey)
             ?? available.FirstOrDefault(q =>
                 !string.IsNullOrWhiteSpace(task.TargetQuestName) &&
                 string.Equals(q.DisplayName, task.TargetQuestName, StringComparison.OrdinalIgnoreCase));

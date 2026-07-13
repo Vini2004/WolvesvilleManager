@@ -44,6 +44,14 @@ public class ScheduledTask
     [MaxLength(120)]
     public string? TargetQuestName { get; set; }
 
+    /// <summary>
+    /// URL da imagem promocional da missão fixada. É a identidade mais estável de uma missão
+    /// (o Id da oferta e o nome do arquivo rotacionam), então a execução casa por ela
+    /// normalizada antes de cair para Id/nome.
+    /// </summary>
+    [MaxLength(500)]
+    public string? TargetQuestPromoImageUrl { get; set; }
+
     /// <summary>Próxima execução, pré-calculada em UTC (indexada para o poll do agendador).</summary>
     public DateTime? NextRunAtUtc { get; set; }
 

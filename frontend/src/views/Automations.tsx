@@ -16,6 +16,7 @@ interface FormState {
   minVotes: number
   targetQuestId: string
   targetQuestName: string
+  targetQuestPromoImageUrl: string
   enabled: boolean
 }
 
@@ -27,6 +28,7 @@ const DEFAULT_FORM: FormState = {
   minVotes: 1,
   targetQuestId: '',
   targetQuestName: '',
+  targetQuestPromoImageUrl: '',
   enabled: true,
 }
 
@@ -40,6 +42,7 @@ function formFromTask(t: ScheduledTask): FormState {
     minVotes: t.minVotes,
     targetQuestId: t.targetQuestId ?? '',
     targetQuestName: t.targetQuestName ?? '',
+    targetQuestPromoImageUrl: t.targetQuestPromoImageUrl ?? '',
     enabled: t.enabled,
   }
 }
@@ -54,6 +57,7 @@ function toRequest(f: FormState): CreateScheduledTaskRequest {
     minVotes: f.minVotes,
     targetQuestId: specific ? f.targetQuestId || null : null,
     targetQuestName: specific ? f.targetQuestName || null : null,
+    targetQuestPromoImageUrl: specific ? f.targetQuestPromoImageUrl || null : null,
     enabled: f.enabled,
   }
 }
@@ -164,6 +168,7 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                       minVotes: t.minVotes,
                       targetQuestId: t.targetQuestId,
                       targetQuestName: t.targetQuestName,
+                      targetQuestPromoImageUrl: t.targetQuestPromoImageUrl,
                       enabled: !t.enabled,
                     }),
                   )
@@ -429,6 +434,7 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                             ...modal.form,
                             targetQuestId: e.target.value,
                             targetQuestName: q ? questName(q) : modal.form.targetQuestName,
+                            targetQuestPromoImageUrl: q?.promoImageUrl ?? modal.form.targetQuestPromoImageUrl,
                           },
                         })
                       }}

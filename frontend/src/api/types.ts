@@ -108,6 +108,7 @@ export interface ScheduledTask {
   minVotes: number
   targetQuestId: string | null
   targetQuestName: string | null
+  targetQuestPromoImageUrl: string | null
   nextRunAtUtc: string | null
   lastRunAtUtc: string | null
   createdAtUtc: string
@@ -120,6 +121,7 @@ export interface CreateScheduledTaskRequest {
   minVotes: number
   targetQuestId?: string | null
   targetQuestName?: string | null
+  targetQuestPromoImageUrl?: string | null
   enabled: boolean
 }
 
