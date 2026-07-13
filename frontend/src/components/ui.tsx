@@ -39,15 +39,17 @@ function PurpleDust() {
   )
 }
 
-/** Cenário Hogwarts: faíscas de varinha e a silhueta do castelo ao fundo. */
+/** Cenário Hogwarts: velas flutuantes (com chama) e a silhueta do castelo ao fundo. */
 function GreatHall() {
-  const sparks = useMemo(
+  const candles = useMemo(
     () =>
-      Array.from({ length: 22 }, (_, i) => ({
-        left: (i * 4.6) % 100,
-        sx: (i % 2 ? 1 : -1) * (18 + i * 3),
-        dur: 5 + (i % 5),
-        delay: i * 0.35,
+      Array.from({ length: 7 }, (_, i) => ({
+        left: 8 + ((i * 13.5) % 84),
+        top: 10 + ((i * 26) % 52),
+        floatDur: 20 + (i % 5) * 1.8, // 20–27.2s: bem devagar
+        flickerDur: 3.2 + (i % 3) * 0.5,
+        delay: i * 1.1,
+        scale: 0.9 + ((i * 3) % 4) / 10,
       })),
     [],
   )
@@ -59,23 +61,55 @@ function GreatHall() {
         className="absolute inset-x-0 top-0 h-1/2"
         style={{ background: 'radial-gradient(120% 90% at 50% -20%, rgba(212,165,63,0.10), transparent 60%)' }}
       />
-      {sparks.map((s, i) => (
+      {candles.map((c, i) => (
         <div
-          key={`s${i}`}
-          className="absolute rounded-full"
-          style={
-            {
-              left: `${s.left}%`,
-              bottom: -10,
-              width: 3,
-              height: 3,
-              background: 'var(--color-gold)',
-              boxShadow: '0 0 6px var(--color-gold)',
-              '--sx': `${s.sx}px`,
-              animation: `sparkleDrift ${s.dur}s ease-out ${s.delay}s infinite`,
-            } as React.CSSProperties
-          }
-        />
+          key={`c${i}`}
+          className="absolute flex flex-col items-center"
+          style={{
+            left: `${c.left}%`,
+            top: `${c.top}%`,
+            transform: `scale(${c.scale})`,
+            animation: `candleFloat ${c.floatDur}s ease-in-out ${c.delay}s infinite`,
+          }}
+        >
+          {/* chama: gota alaranjada com núcleo claro e brilho ao redor */}
+          <div className="relative" style={{ width: 11, height: 17, marginBottom: -2 }}>
+            <div
+              className="absolute inset-0"
+              style={{
+                borderRadius: '50% 50% 50% 50% / 62% 62% 38% 38%',
+                background: 'radial-gradient(circle at 50% 68%, #fff3c4, #ffbf45 42%, #f2812d 72%, transparent 86%)',
+                boxShadow: '0 0 18px 7px rgba(255,168,70,0.5)',
+                transformOrigin: '50% 90%',
+                animation: `candleFlicker ${c.flickerDur}s ease-in-out infinite`,
+              }}
+            />
+            <div
+              className="absolute"
+              style={{
+                left: '50%',
+                bottom: 3,
+                width: 3.5,
+                height: 8,
+                marginLeft: -1.75,
+                borderRadius: '50% 50% 50% 50% / 60% 60% 40% 40%',
+                background: '#fff7dd',
+              }}
+            />
+          </div>
+          {/* pavio */}
+          <div style={{ width: 1.5, height: 3, background: '#241708' }} />
+          {/* corpo de cera claro */}
+          <div
+            style={{
+              width: 5,
+              height: 22,
+              borderRadius: '2px 2px 1px 1px',
+              background: 'linear-gradient(#f0e3c4, #d9c59b 55%, #b6996a)',
+              boxShadow: 'inset -1.5px 0 1px rgba(0,0,0,0.18), 0 1px 2px rgba(0,0,0,0.3)',
+            }}
+          />
+        </div>
       ))}
     </div>
   )
