@@ -46,9 +46,9 @@ function GreatHall() {
       Array.from({ length: 7 }, (_, i) => ({
         left: 8 + ((i * 13.5) % 84),
         top: 10 + ((i * 26) % 52),
-        floatDur: 11 + (i % 5) * 1.4, // 11–16.6s: bem devagar
-        flickerDur: 2.6 + (i % 3) * 0.35,
-        delay: i * 0.9,
+        floatDur: 20 + (i % 5) * 1.8, // 20–27.2s: bem devagar
+        flickerDur: 3.2 + (i % 3) * 0.5,
+        delay: i * 1.1,
         scale: 0.9 + ((i * 3) % 4) / 10,
       })),
     [],
@@ -210,39 +210,15 @@ export function MoonLogo({ size = 36, holeBg = '#150f22' }: { size?: number; hol
   )
 }
 
-/** Emblemas heráldicos por casa (artefatos canônicos: espada, serpente, águia, taça). */
-const HOUSE_EMBLEM: Record<HouseId, ReactNode> = {
-  gryffindor: (
-    <g stroke="#f3e6c8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none">
-      <path d="M20 9 V26" />
-      <path d="M15 24 H25" />
-      <path d="M20 26 V30" />
-      <circle cx="20" cy="31.5" r="1.5" fill="#f3e6c8" stroke="none" />
-    </g>
-  ),
-  slytherin: (
-    <g stroke="#f3e6c8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none">
-      <path d="M24 12 C16 12 16 18.5 21 20.5 C26.5 22.5 24.5 29 16.5 29" />
-      <circle cx="24.5" cy="11.5" r="1.4" fill="#f3e6c8" stroke="none" />
-    </g>
-  ),
-  ravenclaw: (
-    <g stroke="#f3e6c8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none">
-      <path d="M10 16 Q20 23 20 15 Q20 23 30 16" />
-      <path d="M20 21 V28" />
-      <path d="M20 28 L23 30" />
-    </g>
-  ),
-  hufflepuff: (
-    <g stroke="#f3e6c8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none">
-      <path d="M14.5 13 H25.5 L24 21 H16 Z" />
-      <path d="M20 21 V27" />
-      <path d="M15.5 28 H24.5" />
-    </g>
-  ),
+/** Ícone oficial de cada casa (fornecidos em /public). */
+const HOUSE_ICON: Record<HouseId, string> = {
+  gryffindor: '/icons8-grifinória-50.png',
+  slytherin: '/icons8-sonserina-50.png',
+  ravenclaw: '/icons8-corvinal-50.png',
+  hufflepuff: '/icons8-lufa-lufa-50.png',
 }
 
-/** Brasão/selo da casa: escudo heráldico com brilho pulsante. Substitui o logo no tema Hogwarts. */
+/** Brasão/selo da casa: ícone oficial com brilho pulsante atrás. Substitui o logo no tema Hogwarts. */
 export function HouseCrest({ size = 36 }: { size?: number }) {
   const { house, houseColor } = useTheme()
   return (
@@ -251,22 +227,14 @@ export function HouseCrest({ size = 36 }: { size?: number }) {
         className="absolute inset-0 rounded-full"
         style={{ background: houseColor, filter: 'blur(11px)', animation: 'sealGlow 3.5s ease-in-out infinite' }}
       />
-      <svg viewBox="0 0 40 44" width={size} height={size} className="relative">
-        <defs>
-          <linearGradient id={`shield-${house}`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor={houseColor} />
-            <stop offset="1" stopColor="#241708" />
-          </linearGradient>
-        </defs>
-        <path
-          d="M20 2 L36 7 V22 C36 33 29 40 20 42 C11 40 4 33 4 22 V7 Z"
-          fill={`url(#shield-${house})`}
-          stroke="#d4a53f"
-          strokeWidth="1.6"
-        />
-        <path d="M20 2 L36 7 V22 C36 27 33.5 31 30 34 L20 6 Z" fill="rgba(255,255,255,0.07)" />
-        {HOUSE_EMBLEM[house]}
-      </svg>
+      <img
+        src={HOUSE_ICON[house]}
+        alt={house}
+        width={size}
+        height={size}
+        className="relative"
+        style={{ width: size, height: size, objectFit: 'contain', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.45))' }}
+      />
     </div>
   )
 }
