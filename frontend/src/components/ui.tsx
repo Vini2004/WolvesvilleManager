@@ -46,7 +46,7 @@ function GreatHall() {
       Array.from({ length: 7 }, (_, i) => ({
         left: 8 + ((i * 13.5) % 84),
         top: 10 + ((i * 26) % 52),
-        floatDur: 20 + (i % 5) * 1.8, // 20–27.2s: bem devagar
+        floatDur: 8 + (i % 5), // 8–12s
         flickerDur: 3.2 + (i % 3) * 0.5,
         delay: i * 1.1,
         scale: 0.9 + ((i * 3) % 4) / 10,
