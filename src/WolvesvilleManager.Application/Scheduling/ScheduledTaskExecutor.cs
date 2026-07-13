@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using WolvesvilleManager.Application.Common;
@@ -5,6 +6,7 @@ using WolvesvilleManager.Application.Quests;
 using WolvesvilleManager.Domain.Entities;
 using WolvesvilleManager.Domain.Exceptions;
 using WolvesvilleManager.Domain.Interfaces;
+using WolvesvilleManager.Domain.Wolvesville;
 
 namespace WolvesvilleManager.Application.Scheduling;
 
@@ -146,11 +148,11 @@ public class ScheduledTaskExecutor
     private async Task<(TaskExecutionOutcome, string)> ClaimMostVotedQuestAsync(
         ScheduledTask task, string apiKey, string clanId, CancellationToken ct)
     {
-        var active = await _api.GetActiveQuestAsync(apiKey, clanId, ct);
+        var active = await GetActiveQuestSafeAsync(apiKey, clanId, ct);
         if (active is not null)
             return (TaskExecutionOutcome.Skipped, "Já existe uma missão ativa — nada a iniciar.");
 
-        var available = await _api.GetAvailableQuestsAsync(apiKey, clanId, ct);
+        var available = await GetAvailableQuestsSafeAsync(apiKey, clanId, ct);
         if (available.Count == 0)
             return (TaskExecutionOutcome.Skipped, "Não há missões disponíveis no momento.");
 
@@ -187,11 +189,11 @@ public class ScheduledTaskExecutor
         if (string.IsNullOrWhiteSpace(task.TargetQuestId) && string.IsNullOrWhiteSpace(task.TargetQuestName))
             return (TaskExecutionOutcome.Failed, "Nenhuma missão específica foi configurada nesta automação.");
 
-        var active = await _api.GetActiveQuestAsync(apiKey, clanId, ct);
+        var active = await GetActiveQuestSafeAsync(apiKey, clanId, ct);
         if (active is not null)
             return (TaskExecutionOutcome.Skipped, "Já existe uma missão ativa — nada a iniciar.");
 
-        var available = await _api.GetAvailableQuestsAsync(apiKey, clanId, ct);
+        var available = await GetAvailableQuestsSafeAsync(apiKey, clanId, ct);
         if (available.Count == 0)
             return (TaskExecutionOutcome.Skipped, "Não há missões disponíveis no momento.");
 
@@ -219,7 +221,7 @@ public class ScheduledTaskExecutor
     private async Task<(TaskExecutionOutcome, string)> SkipWaitingTimeAsync(
         string apiKey, string clanId, CancellationToken ct)
     {
-        var active = await _api.GetActiveQuestAsync(apiKey, clanId, ct);
+        var active = await GetActiveQuestSafeAsync(apiKey, clanId, ct);
         if (active is null)
             return (TaskExecutionOutcome.Skipped, "Não há missão ativa — nada a pular.");
         if (!active.CanSkipWaitingTime)
@@ -234,7 +236,7 @@ public class ScheduledTaskExecutor
     private async Task<(TaskExecutionOutcome, string)> ClaimExtraTimeAsync(
         string apiKey, string clanId, CancellationToken ct)
     {
-        var active = await _api.GetActiveQuestAsync(apiKey, clanId, ct);
+        var active = await GetActiveQuestSafeAsync(apiKey, clanId, ct);
         if (active is null)
             return (TaskExecutionOutcome.Skipped, "Não há missão ativa — nada a resgatar.");
         if (active.ClaimedTime)
@@ -245,6 +247,33 @@ public class ScheduledTaskExecutor
         await _api.ClaimQuestExtraTimeAsync(apiKey, clanId, ct);
         return (TaskExecutionOutcome.Success,
             $"Tempo extra resgatado para a missão \"{active.Quest.DisplayName}\" (ouro debitado).");
+    }
+
+    // A API do Wolvesville às vezes responde 404 (em vez de 204/lista vazia) quando o clã não
+    // tem missão ativa ou nenhuma disponível — mesmo tratamento já aplicado em QuestService,
+    // replicado aqui para o executor não marcar a execução como falha nesse cenário normal.
+    private async Task<ActiveQuest?> GetActiveQuestSafeAsync(string apiKey, string clanId, CancellationToken ct)
+    {
+        try
+        {
+            return await _api.GetActiveQuestAsync(apiKey, clanId, ct);
+        }
+        catch (WolvesvilleApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    private async Task<List<ClanQuest>> GetAvailableQuestsSafeAsync(string apiKey, string clanId, CancellationToken ct)
+    {
+        try
+        {
+            return await _api.GetAvailableQuestsAsync(apiKey, clanId, ct);
+        }
+        catch (WolvesvilleApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return new List<ClanQuest>();
+        }
     }
 
     private static string Truncate(string value, int max) =>

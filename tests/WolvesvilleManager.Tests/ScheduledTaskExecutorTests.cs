@@ -261,6 +261,48 @@ public class ScheduledTaskExecutorTests
     }
 
     [Fact]
+    public async Task ClaimSpecificQuest_Api404NaMissaoAtiva_TrataComoSemMissaoAtiva()
+    {
+        // A API do Wolvesville às vezes responde 404 (em vez de 204) quando não há missão
+        // ativa — isso não pode ser tratado como falha da automação.
+        using var db = CreateDb();
+        var task = SeedDueTask(db, ScheduledTaskType.ClaimSpecificQuest);
+        task.TargetQuestId = "quest-b";
+        db.SaveChanges();
+        var api = new FakeWolvesvilleClient
+        {
+            ThrowNotFoundOnActiveQuest = true,
+            AvailableQuests = [Quest("quest-a"), Quest("quest-b")],
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        Assert.Equal("quest-b", api.ClaimedQuestId);
+        var log = Assert.Single(db.TaskExecutionLogs);
+        Assert.Equal(TaskExecutionOutcome.Success, log.Outcome);
+    }
+
+    [Fact]
+    public async Task ClaimSpecificQuest_Api404NasDisponiveis_TrataComoNenhumaDisponivel()
+    {
+        using var db = CreateDb();
+        var task = SeedDueTask(db, ScheduledTaskType.ClaimSpecificQuest);
+        task.TargetQuestId = "quest-b";
+        db.SaveChanges();
+        var api = new FakeWolvesvilleClient
+        {
+            ActiveQuest = null,
+            ThrowNotFoundOnAvailableQuests = true,
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        Assert.Null(api.ClaimedQuestId);
+        var log = Assert.Single(db.TaskExecutionLogs);
+        Assert.Equal(TaskExecutionOutcome.Skipped, log.Outcome);
+    }
+
+    [Fact]
     public async Task ExecuteDueTasks_ReagendaProximaExecucaoEMarcaUltima()
     {
         using var db = CreateDb();

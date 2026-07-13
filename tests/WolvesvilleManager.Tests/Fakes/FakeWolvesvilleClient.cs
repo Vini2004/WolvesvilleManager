@@ -1,4 +1,6 @@
+using System.Net;
 using System.Text.Json;
+using WolvesvilleManager.Domain.Exceptions;
 using WolvesvilleManager.Domain.Interfaces;
 using WolvesvilleManager.Domain.Wolvesville;
 
@@ -14,15 +16,24 @@ public class FakeWolvesvilleClient : IWolvesvilleClient
     public List<ClanQuest> AvailableQuests { get; set; } = new();
     public JsonElement Votes { get; set; } = JsonDocument.Parse("{}").RootElement;
 
+    // Simula o comportamento real da API do Wolvesville de responder 404 (em vez de
+    // 204/lista vazia) quando não há missão ativa/disponível.
+    public bool ThrowNotFoundOnActiveQuest { get; set; }
+    public bool ThrowNotFoundOnAvailableQuests { get; set; }
+
     public string? ClaimedQuestId { get; private set; }
     public bool SkippedWaitingTime { get; private set; }
     public bool ClaimedExtraTime { get; private set; }
 
     public Task<ActiveQuest?> GetActiveQuestAsync(string apiKey, string clanId, CancellationToken ct = default) =>
-        Task.FromResult(ActiveQuest);
+        ThrowNotFoundOnActiveQuest
+            ? throw new WolvesvilleApiException(HttpStatusCode.NotFound, "Not Found")
+            : Task.FromResult(ActiveQuest);
 
     public Task<List<ClanQuest>> GetAvailableQuestsAsync(string apiKey, string clanId, CancellationToken ct = default) =>
-        Task.FromResult(AvailableQuests);
+        ThrowNotFoundOnAvailableQuests
+            ? throw new WolvesvilleApiException(HttpStatusCode.NotFound, "Not Found")
+            : Task.FromResult(AvailableQuests);
 
     public Task<JsonElement> GetQuestVotesAsync(string apiKey, string clanId, CancellationToken ct = default) =>
         Task.FromResult(Votes);
