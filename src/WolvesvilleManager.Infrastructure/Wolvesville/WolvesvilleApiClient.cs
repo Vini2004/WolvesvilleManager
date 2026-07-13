@@ -135,22 +135,33 @@ public class WolvesvilleApiClient : IWolvesvilleClient
 
     public async Task<PlayerProfile?> SearchPlayerAsync(string apiKey, string username, CancellationToken ct = default)
     {
+        // [DIAG] Captura status + corpo cru sem passar pelo EnsureSuccess, para revelar exatamente
+        // o que a API devolve para a busca (a mensagem sai como 400, que não é mascarada como os 5xx).
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            $"/players/search?username={Uri.EscapeDataString(username)}");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bot {apiKey}");
+
+        using var response = await _http.SendAsync(request, ct);
+        var json = await response.Content.ReadAsStringAsync(ct);
+
+        if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.NoContent)
+            return null;
+        if (!response.IsSuccessStatusCode)
+            throw new BusinessRuleException($"[DIAG] HTTP {(int)response.StatusCode} de /players/search: {Snippet(json)}");
+        if (string.IsNullOrWhiteSpace(json) || json.Trim() == "null")
+            return null;
+
         try
         {
-            using var response = await SendRawAsync(apiKey, HttpMethod.Get,
-                $"/players/search?username={Uri.EscapeDataString(username)}", null, ct);
-            if (response.StatusCode == HttpStatusCode.NoContent) return null;
-
-            var json = await response.Content.ReadAsStringAsync(ct);
-            // A API às vezes responde 200 com corpo vazio/"null" quando não há jogador com o nome exato.
-            if (string.IsNullOrWhiteSpace(json) || json.Trim() == "null") return null;
             return JsonSerializer.Deserialize<PlayerProfile>(json, JsonOptions);
         }
-        catch (WolvesvilleApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        catch (JsonException jex)
         {
-            return null;
+            throw new BusinessRuleException($"[DIAG] Falha ao ler o perfil: {jex.Message} || Resposta crua: {Snippet(json)}");
         }
     }
+
+    private static string Snippet(string s) => s.Length <= 1200 ? s : s[..1200];
 
     public Task<PlayerProfile> GetPlayerAsync(string apiKey, string playerId, CancellationToken ct = default) =>
         GetAsync<PlayerProfile>(apiKey, $"/players/{playerId}", ct);
