@@ -27,5 +27,13 @@ public class ClanRegistration
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// Token aleatório do formulário público de votação (/votar/{token}).
+    /// Nulo enquanto o admin nunca abriu a aba Votação. É a única credencial da
+    /// página pública, por isso longo e imprevisível.
+    /// </summary>
+    [MaxLength(64)]
+    public string? PollToken { get; set; }
+
     public List<ScheduledTask> ScheduledTasks { get; set; } = new();
 }

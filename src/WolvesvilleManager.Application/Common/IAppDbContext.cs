@@ -13,6 +13,7 @@ public interface IAppDbContext
     DbSet<ScheduledTask> ScheduledTasks { get; }
     DbSet<TaskExecutionLog> TaskExecutionLogs { get; }
     DbSet<MemberXpSnapshot> MemberXpSnapshots { get; }
+    DbSet<QuestPollVote> QuestPollVotes { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

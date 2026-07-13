@@ -13,6 +13,8 @@ import type {
   ClanMember,
   CreateScheduledTaskRequest,
   LedgerEntry,
+  PollAdmin,
+  PollInfo,
   QuestHistoryEntry,
   QuestsOverview,
   RegisteredClan,
@@ -196,6 +198,19 @@ export const api = {
     request<void>(`/api/scheduled-tasks/${taskId}`, { method: 'DELETE' }),
   getTaskLogs: (taskId: number, take = 50) =>
     request<TaskExecutionLog[]>(`/api/scheduled-tasks/${taskId}/logs?take=${take}`),
+
+  // ---------- Votação (formulário público) ----------
+  getPollAdmin: (clanId: number) => request<PollAdmin>(`/api/clans/${clanId}/poll`),
+  resetPoll: (clanId: number) =>
+    request<void>(`/api/clans/${clanId}/poll/reset`, { method: 'POST' }),
+  // Rotas públicas: o backend não exige X-Api-Key em /api/poll/* (o token do link é a credencial).
+  getPublicPoll: (token: string, voterId: string) =>
+    request<PollInfo>(`/api/poll/${token}?voterId=${encodeURIComponent(voterId)}`),
+  votePoll: (token: string, questId: string, voterId: string) =>
+    request<void>(`/api/poll/${token}/vote`, {
+      method: 'POST',
+      body: JSON.stringify({ questId, voterId }),
+    }),
 }
 
 export type { AvailableQuest }

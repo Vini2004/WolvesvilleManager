@@ -138,6 +138,7 @@ public class ScheduledTaskExecutor
         return task.Type switch
         {
             ScheduledTaskType.ClaimMostVotedQuest => await ClaimMostVotedQuestAsync(task, apiKey, clanId, ct),
+            ScheduledTaskType.ClaimMostVotedFormQuest => await ClaimMostVotedFormQuestAsync(task, apiKey, clanId, ct),
             ScheduledTaskType.ClaimSpecificQuest => await ClaimSpecificQuestAsync(task, apiKey, clanId, ct),
             ScheduledTaskType.SkipQuestWaitingTime => await SkipWaitingTimeAsync(apiKey, clanId, ct),
             ScheduledTaskType.ClaimQuestExtraTime => await ClaimExtraTimeAsync(apiKey, clanId, ct),
@@ -181,6 +182,50 @@ public class ScheduledTaskExecutor
         var currency = winner.Quest.PurchasableWithGems ? "gemas" : "ouro";
         return (TaskExecutionOutcome.Success,
             $"Missão \"{winner.Quest.DisplayName}\" iniciada com {winner.Votes} voto(s) (paga com {currency}).");
+    }
+
+    /// <summary>
+    /// Igual à mais votada, mas a urna é o formulário público (votos no nosso banco,
+    /// um por navegador) em vez dos votos de dentro do jogo. Limpa a urna após iniciar.
+    /// </summary>
+    private async Task<(TaskExecutionOutcome, string)> ClaimMostVotedFormQuestAsync(
+        ScheduledTask task, string apiKey, string clanId, CancellationToken ct)
+    {
+        var active = await GetActiveQuestSafeAsync(apiKey, clanId, ct);
+        if (active is not null)
+            return (TaskExecutionOutcome.Skipped, "Já existe uma missão ativa — nada a iniciar.");
+
+        var available = await GetAvailableQuestsSafeAsync(apiKey, clanId, ct);
+        if (available.Count == 0)
+            return (TaskExecutionOutcome.Skipped, "Não há missões disponíveis no momento.");
+
+        var votes = await _db.QuestPollVotes
+            .Where(v => v.ClanRegistrationId == task.ClanRegistrationId)
+            .GroupBy(v => v.QuestId)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionaryAsync(g => g.Key, g => g.Count, ct);
+
+        // Empate: vence a que aparece primeiro na lista de disponíveis (ordem da API).
+        var winner = available
+            .Select(q => (Quest: q, Votes: votes.GetValueOrDefault(q.Id)))
+            .OrderByDescending(x => x.Votes)
+            .First();
+
+        if (winner.Votes < task.MinVotes)
+            return (TaskExecutionOutcome.Skipped,
+                $"Votos insuficientes no formulário: a mais votada (\"{winner.Quest.DisplayName}\") tem " +
+                $"{winner.Votes} voto(s), mínimo configurado é {task.MinVotes}.");
+
+        await _api.ClaimQuestAsync(apiKey, clanId, winner.Quest.Id, ct);
+
+        // Urna limpa: a próxima rodada de missões começa do zero.
+        await _db.QuestPollVotes
+            .Where(v => v.ClanRegistrationId == task.ClanRegistrationId)
+            .ExecuteDeleteAsync(ct);
+
+        var currency = winner.Quest.PurchasableWithGems ? "gemas" : "ouro";
+        return (TaskExecutionOutcome.Success,
+            $"Missão \"{winner.Quest.DisplayName}\" iniciada com {winner.Votes} voto(s) do formulário (paga com {currency}).");
     }
 
     private async Task<(TaskExecutionOutcome, string)> ClaimSpecificQuestAsync(

@@ -92,11 +92,36 @@ export interface BlocklistEntry {
 
 export type ScheduledTaskType =
   | 'ClaimMostVotedQuest'
+  | 'ClaimMostVotedFormQuest'
   | 'ClaimSpecificQuest'
   | 'SkipQuestWaitingTime'
   | 'ClaimQuestExtraTime'
 
 export type TaskExecutionOutcome = 'Success' | 'Skipped' | 'Failed'
+
+/** Missão candidata no formulário público de votação. */
+export interface PollQuest {
+  questId: string
+  name: string
+  imageUrl: string | null
+  gems: boolean
+  votes: number
+}
+
+/** Página pública: candidatas + o voto deste navegador. */
+export interface PollInfo {
+  clanName: string
+  clanTag: string | null
+  quests: PollQuest[]
+  votedQuestId: string | null
+}
+
+/** Aba admin: link e apuração. */
+export interface PollAdmin {
+  token: string
+  quests: PollQuest[]
+  totalVotes: number
+}
 
 export interface ScheduledTask {
   id: number

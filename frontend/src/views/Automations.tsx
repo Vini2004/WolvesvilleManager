@@ -180,7 +180,9 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                 </div>
                 <div className="mt-[3px] font-sans text-[12.5px] text-muted">
                   {humanCron(t.cronExpression, t.timeZoneId)}
-                  {t.type === 'ClaimMostVotedQuest' ? ` · mín. ${t.minVotes} votos` : ''}
+                  {t.type === 'ClaimMostVotedQuest' || t.type === 'ClaimMostVotedFormQuest'
+                    ? ` · mín. ${t.minVotes} votos`
+                    : ''}
                   {t.type === 'ClaimSpecificQuest' ? ` · ${t.targetQuestName || 'missão fixada'}` : ''}
                 </div>
               </div>
@@ -463,7 +465,7 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
             </>
           )}
 
-          {modal.form.type === 'ClaimMostVotedQuest' && (
+          {(modal.form.type === 'ClaimMostVotedQuest' || modal.form.type === 'ClaimMostVotedFormQuest') && (
             <>
               <div className="field-label mb-1.5 mt-[18px]">Mínimo de votos (quórum)</div>
               <input
@@ -479,7 +481,9 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                 className="input-dark"
               />
               <div className="mt-1.5 font-sans text-[11.5px] text-dim">
-                A missão só é iniciada se a mais votada tiver pelo menos este número de votos.
+                {modal.form.type === 'ClaimMostVotedFormQuest'
+                  ? 'Conta os votos do formulário público (aba Votação). A missão só é iniciada se a mais votada tiver pelo menos este número de votos.'
+                  : 'A missão só é iniciada se a mais votada tiver pelo menos este número de votos.'}
               </div>
             </>
           )}

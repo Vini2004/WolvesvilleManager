@@ -25,4 +25,11 @@ public enum ScheduledTaskType
     /// disponíveis no momento. Gasta ouro/gemas do clã.
     /// </summary>
     ClaimSpecificQuest = 4,
+
+    /// <summary>
+    /// Apura os votos do formulário público de votação (link compartilhável) e inicia
+    /// a missão mais votada. Só executa se não houver missão ativa; limpa a urna após
+    /// iniciar. Gasta ouro/gemas do clã.
+    /// </summary>
+    ClaimMostVotedFormQuest = 5,
 }

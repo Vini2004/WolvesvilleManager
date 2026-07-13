@@ -12,12 +12,25 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<ScheduledTask> ScheduledTasks => Set<ScheduledTask>();
     public DbSet<TaskExecutionLog> TaskExecutionLogs => Set<TaskExecutionLog>();
     public DbSet<MemberXpSnapshot> MemberXpSnapshots => Set<MemberXpSnapshot>();
+    public DbSet<QuestPollVote> QuestPollVotes => Set<QuestPollVote>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<QuestPollVote>(e =>
+        {
+            // Um voto por navegador por clã; votar de novo troca a missão (upsert).
+            e.HasIndex(v => new { v.ClanRegistrationId, v.VoterId }).IsUnique();
+            e.HasOne(v => v.ClanRegistration)
+                .WithMany()
+                .HasForeignKey(v => v.ClanRegistrationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<ClanRegistration>(e =>
         {
             e.HasIndex(c => c.ClanId).IsUnique();
+            // Resolução do formulário público: token → clã.
+            e.HasIndex(c => c.PollToken).IsUnique();
             e.HasMany(c => c.ScheduledTasks)
                 .WithOne(t => t.ClanRegistration)
                 .HasForeignKey(t => t.ClanRegistrationId)

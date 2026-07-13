@@ -97,6 +97,7 @@ export function rewardsSummary(rewards: QuestReward[]): string {
 
 export const TASK_TYPE_LABELS: Record<ScheduledTaskType, string> = {
   ClaimMostVotedQuest: 'Iniciar missão mais votada',
+  ClaimMostVotedFormQuest: 'Iniciar mais votada do formulário',
   ClaimSpecificQuest: 'Iniciar missão específica',
   SkipQuestWaitingTime: 'Pular tempo de espera',
   ClaimQuestExtraTime: 'Resgatar tempo extra',

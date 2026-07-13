@@ -8,6 +8,8 @@ import { Dashboard } from './views/Dashboard'
 import { Quests } from './views/Quests'
 import { Members } from './views/Members'
 import { Automations } from './views/Automations'
+import { Poll } from './views/Poll'
+import { PublicPoll } from './views/PublicPoll'
 import { Announcements } from './views/Announcements'
 import { Chat } from './views/Chat'
 import { Activity } from './views/Activity'
@@ -23,6 +25,7 @@ type View =
   | 'activity'
   | 'game'
   | 'automations'
+  | 'poll'
   | 'register'
 
 const TITLES: Record<View, [string, string]> = {
@@ -34,6 +37,7 @@ const TITLES: Record<View, [string, string]> = {
   activity: ['Atividade', 'Livro-razão e log de auditoria do clã'],
   game: ['Jogo', 'Battle pass, loja, rotações e novidades oficiais'],
   automations: ['Automações', 'Tarefas agendadas via expressão cron'],
+  poll: ['Votação', 'Link público para o clã votar na próxima missão'],
   register: ['Registrar clã', 'Conecte uma chave de API de clan bot'],
 }
 
@@ -89,6 +93,13 @@ const NAV_ICONS: Record<View, React.ReactNode> = {
       <path d="M12 7v5l3.5 2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   ),
+  poll: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <rect x="3" y="11" width="18" height="9" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9 11V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V11" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9.5 15h5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  ),
   register: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
       <circle cx="7.5" cy="7.5" r="4.5" stroke="currentColor" strokeWidth="1.8" />
@@ -99,7 +110,19 @@ const NAV_ICONS: Record<View, React.ReactNode> = {
 
 const CLAN_STORAGE = 'wvm.clanRegistrationId'
 
+// Rota pública /votar/{token}: renderiza SÓ o formulário de votação, sem login.
+// Resolvida uma vez no load — a página pública não navega para lugar nenhum.
+const PUBLIC_POLL_TOKEN = window.location.pathname.match(/^\/votar\/([A-Za-z0-9_-]+)\/?$/)?.[1] ?? null
+
 export default function App() {
+  // Página pública de votação: curto-circuito antes de qualquer autenticação.
+  // O token é constante de módulo, então este retorno é estável entre renders.
+  if (PUBLIC_POLL_TOKEN) return <PublicPoll token={PUBLIC_POLL_TOKEN} />
+
+  return <AuthenticatedApp />
+}
+
+function AuthenticatedApp() {
   // 'checking' = validando a chave guardada; 'login' = pedir chave; 'app' = autenticado
   const [phase, setPhase] = useState<'checking' | 'login' | 'app'>('checking')
   const [clans, setClans] = useState<RegisteredClan[]>([])
@@ -289,6 +312,7 @@ export default function App() {
                 {view === 'activity' && selectedClan && <Activity clanRegId={selectedClan.id} />}
                 {view === 'game' && selectedClan && <Game clanRegId={selectedClan.id} />}
                 {view === 'automations' && selectedClan && <Automations clanRegId={selectedClan.id} />}
+                {view === 'poll' && selectedClan && <Poll clanRegId={selectedClan.id} />}
                 {view === 'register' && <RegisterClan clans={clans} onChanged={loadClans} />}
               </ErrorBoundary>
             )}

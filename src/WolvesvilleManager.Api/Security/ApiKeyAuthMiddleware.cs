@@ -25,7 +25,11 @@ public class ApiKeyAuthMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (!string.IsNullOrWhiteSpace(_expectedKey))
+        // O formulário público de votação é aberto por design: quem tem o link vota.
+        // O token aleatório na rota é a credencial; o resto da API segue exigindo a chave.
+        var isPublicPoll = context.Request.Path.StartsWithSegments("/api/poll");
+
+        if (!isPublicPoll && !string.IsNullOrWhiteSpace(_expectedKey))
         {
             var provided = context.Request.Headers[HeaderName].FirstOrDefault();
             if (provided != _expectedKey)
