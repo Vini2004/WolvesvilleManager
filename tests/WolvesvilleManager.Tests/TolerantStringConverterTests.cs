@@ -34,6 +34,24 @@ public class TolerantStringConverterTests
     }
 
     [Fact]
+    public void PlayerProfile_ComLevelNuloEStatusNumerico_NaoQuebra()
+    {
+        // Resposta realista de /players/search: nível oculto (null) e status numérico.
+        // Antes, "level": null quebrava a desserialização (int não-anulável) → 500.
+        const string json = """
+            { "id": "p1", "username": "0Hermione", "level": null, "status": 5,
+              "receivedRosesCount": 12, "lastOnline": "2026-07-10T08:39:34.192Z" }
+            """;
+
+        var player = JsonSerializer.Deserialize<PlayerProfile>(json, Options);
+
+        Assert.NotNull(player);
+        Assert.Null(player!.Level);
+        Assert.Equal("5", player.Status);
+        Assert.Equal(12, player.ReceivedRosesCount);
+    }
+
+    [Fact]
     public void CampoString_ComValoresVariados_Converte()
     {
         Assert.Equal("texto", Roundtrip("\"texto\""));

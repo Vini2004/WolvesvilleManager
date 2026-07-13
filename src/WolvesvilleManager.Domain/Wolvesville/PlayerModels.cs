@@ -9,13 +9,19 @@ public class PlayerProfile
     public string Id { get; set; } = string.Empty;
     public string Username { get; set; } = string.Empty;
     public string? PersonalMessage { get; set; }
-    public int Level { get; set; }
+
+    /// <summary>Anulável: a API omite/manda null quando o nível está oculto pela privacidade.</summary>
+    public int? Level { get; set; }
+
     public string? Status { get; set; }
     public string? ClanId { get; set; }
     public string? LastOnline { get; set; }
     public string? CreationTime { get; set; }
-    public int? RosesReceivedCount { get; set; }
-    public int? RosesSentCount { get; set; }
+
+    // Nomes exatos da API: "receivedRosesCount" / "sentRosesCount".
+    public int? ReceivedRosesCount { get; set; }
+    public int? SentRosesCount { get; set; }
+
     public string? ProfileIconColor { get; set; }
     public GameStats? GameStats { get; set; }
 }
