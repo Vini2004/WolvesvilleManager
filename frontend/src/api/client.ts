@@ -11,6 +11,7 @@ import type {
   ShopOffer,
   ClanInfo,
   ClanMember,
+  ClanQuest,
   CreateScheduledTaskRequest,
   LedgerEntry,
   QuestHistoryEntry,
@@ -100,6 +101,7 @@ export const api = {
   getQuestsOverview: (clanId: number) => request<QuestsOverview>(`/api/clans/${clanId}/quests`),
   getQuestHistory: (clanId: number) =>
     request<QuestHistoryEntry[]>(`/api/clans/${clanId}/quests/history`),
+  getAllQuests: (clanId: number) => request<ClanQuest[]>(`/api/clans/${clanId}/quests/all`),
   claimQuest: (clanId: number, questId: string) =>
     request<void>(`/api/clans/${clanId}/quests/claim`, {
       method: 'POST',

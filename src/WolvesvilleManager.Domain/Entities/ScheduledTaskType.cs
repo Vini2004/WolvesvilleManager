@@ -18,4 +18,11 @@ public enum ScheduledTaskType
     /// Resgata o tempo extra da missão ativa (uma vez por missão). Gasta ouro do clã.
     /// </summary>
     ClaimQuestExtraTime = 3,
+
+    /// <summary>
+    /// Inicia uma missão específica (escolhida na automação), ignorando votos.
+    /// Só executa se não houver missão ativa e se a missão escolhida estiver entre as
+    /// disponíveis no momento. Gasta ouro/gemas do clã.
+    /// </summary>
+    ClaimSpecificQuest = 4,
 }

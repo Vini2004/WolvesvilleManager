@@ -136,6 +136,7 @@ public class ScheduledTaskExecutor
         return task.Type switch
         {
             ScheduledTaskType.ClaimMostVotedQuest => await ClaimMostVotedQuestAsync(task, apiKey, clanId, ct),
+            ScheduledTaskType.ClaimSpecificQuest => await ClaimSpecificQuestAsync(task, apiKey, clanId, ct),
             ScheduledTaskType.SkipQuestWaitingTime => await SkipWaitingTimeAsync(apiKey, clanId, ct),
             ScheduledTaskType.ClaimQuestExtraTime => await ClaimExtraTimeAsync(apiKey, clanId, ct),
             _ => (TaskExecutionOutcome.Failed, $"Tipo de tarefa desconhecido: {task.Type}."),
@@ -178,6 +179,41 @@ public class ScheduledTaskExecutor
         var currency = winner.Quest.PurchasableWithGems ? "gemas" : "ouro";
         return (TaskExecutionOutcome.Success,
             $"Missão \"{winner.Quest.DisplayName}\" iniciada com {winner.Votes} voto(s) (paga com {currency}).");
+    }
+
+    private async Task<(TaskExecutionOutcome, string)> ClaimSpecificQuestAsync(
+        ScheduledTask task, string apiKey, string clanId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(task.TargetQuestId) && string.IsNullOrWhiteSpace(task.TargetQuestName))
+            return (TaskExecutionOutcome.Failed, "Nenhuma missão específica foi configurada nesta automação.");
+
+        var active = await _api.GetActiveQuestAsync(apiKey, clanId, ct);
+        if (active is not null)
+            return (TaskExecutionOutcome.Skipped, "Já existe uma missão ativa — nada a iniciar.");
+
+        var available = await _api.GetAvailableQuestsAsync(apiKey, clanId, ct);
+        if (available.Count == 0)
+            return (TaskExecutionOutcome.Skipped, "Não há missões disponíveis no momento.");
+
+        // Casa por Id (preferível) e, como as ofertas rotacionam e os ids podem variar,
+        // cai para o nome legível guardado na automação.
+        var target =
+            available.FirstOrDefault(q => !string.IsNullOrEmpty(task.TargetQuestId) && q.Id == task.TargetQuestId)
+            ?? available.FirstOrDefault(q =>
+                !string.IsNullOrWhiteSpace(task.TargetQuestName) &&
+                string.Equals(q.DisplayName, task.TargetQuestName, StringComparison.OrdinalIgnoreCase));
+
+        if (target is null)
+        {
+            var label = string.IsNullOrWhiteSpace(task.TargetQuestName) ? "escolhida" : $"\"{task.TargetQuestName}\"";
+            return (TaskExecutionOutcome.Skipped,
+                $"A missão {label} não está entre as disponíveis neste horário — as ofertas rotacionam.");
+        }
+
+        await _api.ClaimQuestAsync(apiKey, clanId, target.Id, ct);
+        var currency = target.PurchasableWithGems ? "gemas" : "ouro";
+        return (TaskExecutionOutcome.Success,
+            $"Missão \"{target.DisplayName}\" iniciada (paga com {currency}).");
     }
 
     private async Task<(TaskExecutionOutcome, string)> SkipWaitingTimeAsync(

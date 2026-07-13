@@ -24,6 +24,11 @@ public class QuestsController : ControllerBase
     public Task<List<QuestHistoryEntry>> History(int id, CancellationToken ct) =>
         _service.GetHistoryAsync(id, ct);
 
+    /// <summary>Catálogo completo de missões (para fixar uma missão numa automação).</summary>
+    [HttpGet("all")]
+    public Task<List<ClanQuest>> All(int id, CancellationToken ct) =>
+        _service.GetAllQuestsAsync(id, ct);
+
     /// <summary>Inicia (compra) uma missão. Gasta ouro/gemas do clã!</summary>
     [HttpPost("claim")]
     public async Task<IActionResult> Claim(int id, [FromBody] ClaimQuestRequest request, CancellationToken ct)

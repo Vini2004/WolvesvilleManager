@@ -3,7 +3,7 @@ import { api, ApiError } from '../api/client'
 import type { CreateScheduledTaskRequest, ScheduledTask, ScheduledTaskType, TaskExecutionLog } from '../api/types'
 import { ErrorBox, Loading, Modal, SectionTitle, Toggle } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
-import { fmtDateTime, humanCron, OUTCOME_META, TASK_TYPE_LABELS } from '../lib/format'
+import { fmtDateTime, humanCron, OUTCOME_META, questName, TASK_TYPE_LABELS } from '../lib/format'
 import { buildCron, parseCron, WEEKDAY_OPTIONS, DEFAULT_SCHEDULE, type FriendlySchedule } from '../lib/cron'
 
 type Mode = 'simple' | 'advanced'
@@ -14,6 +14,8 @@ interface FormState {
   schedule: FriendlySchedule
   advancedCron: string
   minVotes: number
+  targetQuestId: string
+  targetQuestName: string
   enabled: boolean
 }
 
@@ -23,6 +25,8 @@ const DEFAULT_FORM: FormState = {
   schedule: { ...DEFAULT_SCHEDULE },
   advancedCron: buildCron(DEFAULT_SCHEDULE),
   minVotes: 1,
+  targetQuestId: '',
+  targetQuestName: '',
   enabled: true,
 }
 
@@ -34,23 +38,30 @@ function formFromTask(t: ScheduledTask): FormState {
     schedule: parsed ?? { ...DEFAULT_SCHEDULE },
     advancedCron: t.cronExpression,
     minVotes: t.minVotes,
+    targetQuestId: t.targetQuestId ?? '',
+    targetQuestName: t.targetQuestName ?? '',
     enabled: t.enabled,
   }
 }
 
 function toRequest(f: FormState): CreateScheduledTaskRequest {
   const cronExpression = f.mode === 'simple' ? buildCron(f.schedule) : f.advancedCron
+  const specific = f.type === 'ClaimSpecificQuest'
   return {
     type: f.type,
     cronExpression,
     timeZoneId: 'America/Sao_Paulo',
     minVotes: f.minVotes,
+    targetQuestId: specific ? f.targetQuestId || null : null,
+    targetQuestName: specific ? f.targetQuestName || null : null,
     enabled: f.enabled,
   }
 }
 
 export function Automations({ clanRegId }: { clanRegId: number }) {
   const tasks = useAsync(() => api.listScheduledTasks(clanRegId), [clanRegId])
+  // Catálogo de missões para a automação "Iniciar missão específica" (usado no seletor do modal).
+  const catalog = useAsync(() => api.getAllQuests(clanRegId), [clanRegId])
   const logs = useAsync(async () => {
     const list = await api.listScheduledTasks(clanRegId)
     const byTask = await Promise.all(
@@ -89,6 +100,10 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
 
   const submitModal = async () => {
     if (!modal) return
+    if (modal.form.type === 'ClaimSpecificQuest' && !modal.form.targetQuestId) {
+      setFormError('Escolha a missão específica que a automação deve iniciar.')
+      return
+    }
     setBusy(true)
     setFormError(null)
     try {
@@ -147,6 +162,8 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                       cronExpression: t.cronExpression,
                       timeZoneId: t.timeZoneId,
                       minVotes: t.minVotes,
+                      targetQuestId: t.targetQuestId,
+                      targetQuestName: t.targetQuestName,
                       enabled: !t.enabled,
                     }),
                   )
@@ -159,6 +176,7 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                 <div className="mt-[3px] font-sans text-[12.5px] text-muted">
                   {humanCron(t.cronExpression, t.timeZoneId)}
                   {t.type === 'ClaimMostVotedQuest' ? ` · mín. ${t.minVotes} votos` : ''}
+                  {t.type === 'ClaimSpecificQuest' ? ` · ${t.targetQuestName || 'missão fixada'}` : ''}
                 </div>
               </div>
             </div>
@@ -383,6 +401,58 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
               />
               <div className="mt-1.5 font-sans text-[11.5px] text-dim">
                 Expressão cron de 5 campos: minuto, hora, dia do mês, mês, dia da semana.
+              </div>
+            </>
+          )}
+
+          {modal.form.type === 'ClaimSpecificQuest' && (
+            <>
+              <div className="field-label mb-1.5 mt-[18px]">Missão a iniciar</div>
+              {catalog.loading ? (
+                <div className="input-dark text-muted">Carregando missões…</div>
+              ) : catalog.error ? (
+                <ErrorBox message={catalog.error} onRetry={catalog.reload} />
+              ) : (
+                (() => {
+                  const list = catalog.data ?? []
+                  // Se a missão fixada não estiver no catálogo atual, mantém a opção salva visível.
+                  const missingSaved =
+                    modal.form.targetQuestId && !list.some((q) => q.id === modal.form.targetQuestId)
+                  return (
+                    <select
+                      value={modal.form.targetQuestId}
+                      onChange={(e) => {
+                        const q = list.find((x) => x.id === e.target.value)
+                        setModal({
+                          ...modal,
+                          form: {
+                            ...modal.form,
+                            targetQuestId: e.target.value,
+                            targetQuestName: q ? questName(q) : modal.form.targetQuestName,
+                          },
+                        })
+                      }}
+                      className="input-dark cursor-pointer"
+                    >
+                      <option value="">Selecione uma missão…</option>
+                      {missingSaved && (
+                        <option value={modal.form.targetQuestId}>
+                          {modal.form.targetQuestName || 'Missão fixada'} (fora do catálogo atual)
+                        </option>
+                      )}
+                      {list.map((q) => (
+                        <option key={q.id} value={q.id}>
+                          {questName(q)} · {q.purchasableWithGems ? 'gemas' : 'ouro'}
+                        </option>
+                      ))}
+                    </select>
+                  )
+                })()
+              )}
+              <div className="mt-1.5 font-sans text-[11.5px] text-dim">
+                Inicia esta missão no horário agendado, ignorando votos. Como as ofertas do clã
+                rotacionam, ela só é iniciada se estiver disponível na hora — senão, a execução é
+                registrada e pulada.
               </div>
             </>
           )}

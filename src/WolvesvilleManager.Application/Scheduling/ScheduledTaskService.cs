@@ -49,6 +49,8 @@ public class ScheduledTaskService
             CronExpression = request.CronExpression.Trim(),
             TimeZoneId = request.TimeZoneId.Trim(),
             MinVotes = request.MinVotes,
+            TargetQuestId = request.TargetQuestId?.Trim(),
+            TargetQuestName = request.TargetQuestName?.Trim(),
             Enabled = request.Enabled,
         };
         task.NextRunAtUtc = task.Enabled
@@ -74,6 +76,8 @@ public class ScheduledTaskService
         task.CronExpression = request.CronExpression.Trim();
         task.TimeZoneId = request.TimeZoneId.Trim();
         task.MinVotes = request.MinVotes;
+        task.TargetQuestId = request.TargetQuestId?.Trim();
+        task.TargetQuestName = request.TargetQuestName?.Trim();
         task.Enabled = request.Enabled;
         task.NextRunAtUtc = task.Enabled
             ? CronScheduleCalculator.GetNextOccurrenceUtc(task.CronExpression, task.TimeZoneId, DateTime.UtcNow)
@@ -153,11 +157,15 @@ public class ScheduledTaskService
                 "Fuso horário inválido. Use um ID IANA, ex.: \"America/Sao_Paulo\".");
         if (request.MinVotes < 0)
             throw new BusinessRuleException("MinVotes não pode ser negativo.");
+        if (request.Type == ScheduledTaskType.ClaimSpecificQuest &&
+            string.IsNullOrWhiteSpace(request.TargetQuestId) &&
+            string.IsNullOrWhiteSpace(request.TargetQuestName))
+            throw new BusinessRuleException("Escolha a missão específica que a automação deve iniciar.");
     }
 
     private static ScheduledTaskDto ToDto(ScheduledTask t) => new(
         t.Id, t.ClanRegistrationId, t.Type, t.CronExpression, t.TimeZoneId,
-        t.Enabled, t.MinVotes, t.NextRunAtUtc, t.LastRunAtUtc, t.CreatedAtUtc);
+        t.Enabled, t.MinVotes, t.TargetQuestId, t.TargetQuestName, t.NextRunAtUtc, t.LastRunAtUtc, t.CreatedAtUtc);
 }
 
 public record CreateScheduledTaskRequest(
@@ -165,6 +173,8 @@ public record CreateScheduledTaskRequest(
     string CronExpression,
     string TimeZoneId = "America/Sao_Paulo",
     int MinVotes = 1,
+    string? TargetQuestId = null,
+    string? TargetQuestName = null,
     bool Enabled = true);
 
 public record ScheduledTaskDto(
@@ -175,6 +185,8 @@ public record ScheduledTaskDto(
     string TimeZoneId,
     bool Enabled,
     int MinVotes,
+    string? TargetQuestId,
+    string? TargetQuestName,
     DateTime? NextRunAtUtc,
     DateTime? LastRunAtUtc,
     DateTime CreatedAtUtc);
