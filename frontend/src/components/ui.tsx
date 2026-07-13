@@ -115,7 +115,7 @@ function GreatHall() {
   )
 }
 
-/** Silhueta estilizada do castelo de Hogwarts, com janelas acesas, fixada na base da tela. */
+/** Silhueta estilizada do castelo de Hogwarts, fixada na base da tela. */
 function Castle() {
   return (
     <svg
@@ -134,24 +134,6 @@ function Castle() {
         fill="url(#castle)"
         d="M0 300 V210 h60 v-40 h30 v40 h50 v-70 l25-30 25 30 v70 h60 v-120 l30-34 30 34 v120 h70 v-60 h26 v-40 h28 v40 h26 v60 h80 v-96 l34-40 34 40 v96 h70 v-150 l40-46 40 46 v150 h74 v-70 h28 v-44 h30 v44 h28 v70 h70 v-110 l32-38 32 38 v110 h64 v-46 h26 v-34 h28 v34 h26 v46 h70 v-64 l24-28 24 28 v64 h60 V300 Z"
       />
-      {/* janelas acesas */}
-      {[
-        [175, 175], [175, 200], [305, 150], [305, 185], [305, 220],
-        [590, 130], [590, 165], [590, 200], [590, 235], [608, 148], [572, 148],
-        [872, 165], [872, 200], [1010, 170], [1010, 205],
-      ].map(([x, y], i) => (
-        <rect
-          key={i}
-          x={x - 3}
-          y={y}
-          width="6"
-          height="10"
-          rx="1.5"
-          fill="#f2b64a"
-          opacity={0.75}
-          style={{ animation: `candleFlicker ${2.4 + (i % 3) * 0.5}s ease-in-out ${i * 0.2}s infinite` }}
-        />
-      ))}
     </svg>
   )
 }
