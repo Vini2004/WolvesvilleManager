@@ -60,8 +60,8 @@ function toRequest(f: FormState): CreateScheduledTaskRequest {
 
 export function Automations({ clanRegId }: { clanRegId: number }) {
   const tasks = useAsync(() => api.listScheduledTasks(clanRegId), [clanRegId])
-  // Catálogo de missões para a automação "Iniciar missão específica" (usado no seletor do modal).
-  const catalog = useAsync(() => api.getAllQuests(clanRegId), [clanRegId])
+  // Missões disponíveis do clã (as mesmas da aba "Missões") para o seletor de missão específica.
+  const available = useAsync(() => api.getQuestsOverview(clanRegId), [clanRegId])
   const logs = useAsync(async () => {
     const list = await api.listScheduledTasks(clanRegId)
     const byTask = await Promise.all(
@@ -408,14 +408,14 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
           {modal.form.type === 'ClaimSpecificQuest' && (
             <>
               <div className="field-label mb-1.5 mt-[18px]">Missão a iniciar</div>
-              {catalog.loading ? (
+              {available.loading ? (
                 <div className="input-dark text-muted">Carregando missões…</div>
-              ) : catalog.error ? (
-                <ErrorBox message={catalog.error} onRetry={catalog.reload} />
+              ) : available.error ? (
+                <ErrorBox message={available.error} onRetry={available.reload} />
               ) : (
                 (() => {
-                  const list = catalog.data ?? []
-                  // Se a missão fixada não estiver no catálogo atual, mantém a opção salva visível.
+                  const list = (available.data?.available ?? []).map((a) => a.quest)
+                  // Se a missão fixada não estiver mais entre as disponíveis, mantém a opção salva visível.
                   const missingSaved =
                     modal.form.targetQuestId && !list.some((q) => q.id === modal.form.targetQuestId)
                   return (
@@ -437,7 +437,7 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                       <option value="">Selecione uma missão…</option>
                       {missingSaved && (
                         <option value={modal.form.targetQuestId}>
-                          {modal.form.targetQuestName || 'Missão fixada'} (fora do catálogo atual)
+                          {modal.form.targetQuestName || 'Missão fixada'} (fora das disponíveis agora)
                         </option>
                       )}
                       {list.map((q) => (
@@ -450,9 +450,9 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                 })()
               )}
               <div className="mt-1.5 font-sans text-[11.5px] text-dim">
-                Inicia esta missão no horário agendado, ignorando votos. Como as ofertas do clã
-                rotacionam, ela só é iniciada se estiver disponível na hora — senão, a execução é
-                registrada e pulada.
+                Escolha entre as missões disponíveis do clã (as mesmas da aba “Missões”). No horário
+                agendado ela é iniciada ignorando votos, desde que ainda esteja disponível — senão, a
+                execução é registrada e pulada.
               </div>
             </>
           )}

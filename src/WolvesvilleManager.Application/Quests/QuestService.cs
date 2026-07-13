@@ -68,16 +68,6 @@ public class QuestService
         return await _api.GetQuestHistoryAsync(apiKey, reg.ClanId, ct);
     }
 
-    /// <summary>Catálogo completo de missões (para escolher uma missão fixa numa automação).</summary>
-    public async Task<List<ClanQuest>> GetAllQuestsAsync(int clanRegistrationId, CancellationToken ct = default)
-    {
-        var (_, apiKey) = await _resolver.ResolveAsync(clanRegistrationId, ct);
-        var all = await _api.GetAllQuestsAsync(apiKey, ct);
-        return all
-            .OrderBy(q => q.DisplayName, StringComparer.CurrentCultureIgnoreCase)
-            .ToList();
-    }
-
     /// <summary>Inicia (compra) uma missão. Gasta ouro/gemas do clã!</summary>
     public async Task ClaimAsync(int clanRegistrationId, string questId, CancellationToken ct = default)
     {
