@@ -104,6 +104,68 @@ public class ScheduledTaskExecutorTests
     }
 
     [Fact]
+    public async Task ClaimSpecificQuest_MissaoDisponivel_Inicia()
+    {
+        using var db = CreateDb();
+        var task = SeedDueTask(db, ScheduledTaskType.ClaimSpecificQuest);
+        task.TargetQuestId = "quest-b";
+        task.TargetQuestName = "quest b";
+        db.SaveChanges();
+        var api = new FakeWolvesvilleClient
+        {
+            ActiveQuest = null,
+            AvailableQuests = [Quest("quest-a"), Quest("quest-b")],
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        Assert.Equal("quest-b", api.ClaimedQuestId);
+        var log = Assert.Single(db.TaskExecutionLogs);
+        Assert.Equal(TaskExecutionOutcome.Success, log.Outcome);
+    }
+
+    [Fact]
+    public async Task ClaimSpecificQuest_NaoDisponivel_Pula()
+    {
+        using var db = CreateDb();
+        var task = SeedDueTask(db, ScheduledTaskType.ClaimSpecificQuest);
+        task.TargetQuestId = "quest-x";
+        task.TargetQuestName = "quest x";
+        db.SaveChanges();
+        var api = new FakeWolvesvilleClient
+        {
+            ActiveQuest = null,
+            AvailableQuests = [Quest("quest-a"), Quest("quest-b")],
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        Assert.Null(api.ClaimedQuestId);
+        var log = Assert.Single(db.TaskExecutionLogs);
+        Assert.Equal(TaskExecutionOutcome.Skipped, log.Outcome);
+    }
+
+    [Fact]
+    public async Task ClaimSpecificQuest_JaExisteMissaoAtiva_Pula()
+    {
+        using var db = CreateDb();
+        var task = SeedDueTask(db, ScheduledTaskType.ClaimSpecificQuest);
+        task.TargetQuestId = "quest-a";
+        db.SaveChanges();
+        var api = new FakeWolvesvilleClient
+        {
+            ActiveQuest = new ActiveQuest { Quest = Quest("quest-z") },
+            AvailableQuests = [Quest("quest-a")],
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        Assert.Null(api.ClaimedQuestId);
+        var log = Assert.Single(db.TaskExecutionLogs);
+        Assert.Equal(TaskExecutionOutcome.Skipped, log.Outcome);
+    }
+
+    [Fact]
     public async Task SkipWaitingTime_SoPulaQuandoMissaoEstaNaEspera()
     {
         using var db = CreateDb();

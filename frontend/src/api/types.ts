@@ -92,6 +92,7 @@ export interface BlocklistEntry {
 
 export type ScheduledTaskType =
   | 'ClaimMostVotedQuest'
+  | 'ClaimSpecificQuest'
   | 'SkipQuestWaitingTime'
   | 'ClaimQuestExtraTime'
 
@@ -105,6 +106,8 @@ export interface ScheduledTask {
   timeZoneId: string
   enabled: boolean
   minVotes: number
+  targetQuestId: string | null
+  targetQuestName: string | null
   nextRunAtUtc: string | null
   lastRunAtUtc: string | null
   createdAtUtc: string
@@ -115,6 +118,8 @@ export interface CreateScheduledTaskRequest {
   cronExpression: string
   timeZoneId: string
   minVotes: number
+  targetQuestId?: string | null
+  targetQuestName?: string | null
   enabled: boolean
 }
 

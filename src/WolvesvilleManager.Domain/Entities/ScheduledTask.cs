@@ -33,6 +33,17 @@ public class ScheduledTask
     /// </summary>
     public int MinVotes { get; set; } = 1;
 
+    /// <summary>
+    /// Id da missão a iniciar em <see cref="ScheduledTaskType.ClaimSpecificQuest"/>.
+    /// Como as ofertas rotacionam, a execução casa por Id ou pelo nome guardado.
+    /// </summary>
+    [MaxLength(60)]
+    public string? TargetQuestId { get; set; }
+
+    /// <summary>Nome legível da missão fixada (para exibição, logs e fallback de correspondência).</summary>
+    [MaxLength(120)]
+    public string? TargetQuestName { get; set; }
+
     /// <summary>Próxima execução, pré-calculada em UTC (indexada para o poll do agendador).</summary>
     public DateTime? NextRunAtUtc { get; set; }
 

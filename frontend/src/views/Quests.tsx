@@ -3,7 +3,7 @@ import { api, ApiError } from '../api/client'
 import { ErrorBox, Loading, Pager, SectionTitle } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 import { usePaged } from '../lib/paged'
-import { fmtDate, fmtNumber, questName, rewardsSummary } from '../lib/format'
+import { fmtDate, fmtNumber, questName, rewardsSummary, timeLeft } from '../lib/format'
 
 export function Quests({ clanRegId }: { clanRegId: number }) {
   const overview = useAsync(() => api.getQuestsOverview(clanRegId), [clanRegId])
@@ -33,7 +33,10 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
 
   const data = overview.data!
   const maxVotes = Math.max(1, ...data.available.map((q) => q.votes))
-  const hasActive = data.active != null
+  const active = data.active
+  const hasActive = active != null
+  // Tempo até o tier atual liberar; enquanto houver missão ativa não dá para iniciar outra.
+  const freesIn = active ? timeLeft(active.tierEndTime) : null
 
   return (
     <div>
@@ -118,7 +121,11 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
 
                   <button
                     disabled={busy !== null || hasActive}
-                    title={hasActive ? 'Já existe uma missão ativa' : undefined}
+                    title={
+                      hasActive
+                        ? 'Só é possível iniciar uma missão por vez. Use "Pular espera" no painel para liberar antes.'
+                        : undefined
+                    }
                     onClick={() =>
                       run(
                         `claim-${q.id}`,
@@ -128,7 +135,13 @@ export function Quests({ clanRegId }: { clanRegId: number }) {
                     }
                     className="btn-primary mt-auto w-full"
                   >
-                    {busy === `claim-${q.id}` ? '…' : 'Iniciar missão'}
+                    {busy === `claim-${q.id}`
+                      ? '…'
+                      : hasActive
+                        ? freesIn
+                          ? `Disponível em ${freesIn}`
+                          : 'Missão em andamento'
+                        : 'Iniciar missão'}
                   </button>
                 </div>
               </div>
