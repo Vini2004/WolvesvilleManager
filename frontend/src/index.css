@@ -44,9 +44,12 @@
   100% { opacity: 1; filter: blur(0); transform: translateY(0); }
 }
 /* velas flutuantes: sobe/desce bem devagar (a duração longa vem do JS) */
+/* movimento orgânico de levitação: sobe/desce + deriva lateral + leve rotação, tudo bem devagar */
 @keyframes candleFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+  0%, 100% { transform: translate(0, 0) rotate(0deg) scale(var(--scale, 1)); }
+  25% { transform: translate(4px, -11px) rotate(1.5deg) scale(var(--scale, 1)); }
+  50% { transform: translate(-3px, -18px) rotate(-1.5deg) scale(var(--scale, 1)); }
+  75% { transform: translate(-4px, -9px) rotate(1deg) scale(var(--scale, 1)); }
 }
 /* a chama tremula de leve, sem saltar (também usado nas janelas acesas do castelo) */
 @keyframes candleFlicker {

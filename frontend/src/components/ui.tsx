@@ -65,12 +65,14 @@ function GreatHall() {
         <div
           key={`c${i}`}
           className="absolute flex flex-col items-center"
-          style={{
-            left: `${c.left}%`,
-            top: `${c.top}%`,
-            transform: `scale(${c.scale})`,
-            animation: `candleFloat ${c.floatDur}s ease-in-out ${c.delay}s infinite`,
-          }}
+          style={
+            {
+              left: `${c.left}%`,
+              top: `${c.top}%`,
+              '--scale': c.scale,
+              animation: `candleFloat ${c.floatDur}s ease-in-out ${c.delay}s infinite`,
+            } as React.CSSProperties
+          }
         >
           {/* chama: gota alaranjada com núcleo claro e brilho ao redor */}
           <div className="relative" style={{ width: 11, height: 17, marginBottom: -2 }}>
