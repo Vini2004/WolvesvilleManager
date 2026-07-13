@@ -29,19 +29,29 @@ public static class CronJobOrgTranslator
     }
 
     /// <summary>
-    /// Cron ~<paramref name="leadMinutes"/> min antes, para pré-aquecer o app/banco. Só trata o
-    /// caso comum (minuto e hora únicos, sem virar o dia anterior); fora disso devolve null e o
-    /// gatilho de execução sozinho + o retry de conexão dão conta (tarefa roda ~40s mais tarde).
+    /// Cron ~<paramref name="leadMinutes"/> min antes, para pré-aquecer o app/banco. Trata minuto
+    /// único com hora única OU lista de horas ("0 18,20,22 * * MON-FRI" → "55 17,19,21 …", usado
+    /// pelos horários de retentativa do pular-espera); fora disso devolve null e o gatilho de
+    /// execução sozinho + o retry de conexão dão conta (tarefa roda ~40s mais tarde).
     /// ponytail: warm-up é otimização, não correção — o edge de meia-noite (00:0X) fica sem pré-aquecer.
     /// </summary>
     public static string? TryWarmupCron(string cron, int leadMinutes = 5)
     {
         var f = cron.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (f.Length != 5) return null;
-        if (!int.TryParse(f[0], out var m) || !int.TryParse(f[1], out var h)) return null;
-        var total = h * 60 + m - leadMinutes;
-        if (total < 0) return null;
-        return $"{total % 60} {total / 60} {f[2]} {f[3]} {f[4]}";
+        if (!int.TryParse(f[0], out var m)) return null;
+
+        var warmHours = new List<int>();
+        var warmMinute = 0;
+        foreach (var part in f[1].Split(','))
+        {
+            if (!int.TryParse(part, out var h)) return null;
+            var total = h * 60 + m - leadMinutes;
+            if (total < 0) return null; // viraria o dia anterior — sem pré-aquecer
+            warmMinute = total % 60; // igual para todas as horas (mesmo minuto de origem)
+            warmHours.Add(total / 60);
+        }
+        return $"{warmMinute} {string.Join(",", warmHours.Distinct().OrderBy(h => h))} {f[2]} {f[3]} {f[4]}";
     }
 
     private static int[] ParseDow(string field)

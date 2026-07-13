@@ -140,7 +140,7 @@ public class ScheduledTaskExecutor
             ScheduledTaskType.ClaimMostVotedQuest => await ClaimMostVotedQuestAsync(task, apiKey, clanId, ct),
             ScheduledTaskType.ClaimMostVotedFormQuest => await ClaimMostVotedFormQuestAsync(task, apiKey, clanId, ct),
             ScheduledTaskType.ClaimSpecificQuest => await ClaimSpecificQuestAsync(task, apiKey, clanId, ct),
-            ScheduledTaskType.SkipQuestWaitingTime => await SkipWaitingTimeAsync(apiKey, clanId, ct),
+            ScheduledTaskType.SkipQuestWaitingTime => await SkipWaitingTimeAsync(task, apiKey, clanId, ct),
             ScheduledTaskType.ClaimQuestExtraTime => await ClaimExtraTimeAsync(apiKey, clanId, ct),
             _ => (TaskExecutionOutcome.Failed, $"Tipo de tarefa desconhecido: {task.Type}."),
         };
@@ -269,14 +269,30 @@ public class ScheduledTaskExecutor
     }
 
     private async Task<(TaskExecutionOutcome, string)> SkipWaitingTimeAsync(
-        string apiKey, string clanId, CancellationToken ct)
+        ScheduledTask task, string apiKey, string clanId, CancellationToken ct)
     {
+        // No máximo UM pulo por dia (no fuso da tarefa). Permite agendar horários de
+        // retentativa no próprio cron (ex.: "0 18,20,22 * * SEG-SEX": se às 18h o XP do
+        // tier ainda não bateu, tenta às 20h e às 22h) sem o risco de uma tentativa
+        // extra pular a espera do tier SEGUINTE — que o plano manda deixar abrir sozinho.
+        var tz = TimeZoneInfo.FindSystemTimeZoneById(task.TimeZoneId);
+        var dayStartUtc = TimeZoneInfo.ConvertTimeToUtc(
+            TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Date, tz);
+        var skippedToday = await _db.TaskExecutionLogs.AnyAsync(
+            l => l.ScheduledTaskId == task.Id
+                 && l.Outcome == TaskExecutionOutcome.Success
+                 && l.RanAtUtc >= dayStartUtc, ct);
+        if (skippedToday)
+            return (TaskExecutionOutcome.Skipped,
+                "A espera de hoje já foi pulada por esta automação — as próximas ocorrências do dia são só retentativa.");
+
         var active = await GetActiveQuestSafeAsync(apiKey, clanId, ct);
         if (active is null)
             return (TaskExecutionOutcome.Skipped, "Não há missão ativa — nada a pular.");
         if (!active.CanSkipWaitingTime)
             return (TaskExecutionOutcome.Skipped,
-                "A missão ainda está acumulando XP para o objetivo — não há tempo de espera a pular.");
+                "O XP do tier ainda não bateu o objetivo — nada a pular agora. Se o cron tiver mais " +
+                "horários hoje (ex.: 18,20,22h), a próxima ocorrência tenta de novo.");
 
         await _api.SkipQuestWaitingTimeAsync(apiKey, clanId, ct);
         return (TaskExecutionOutcome.Success,

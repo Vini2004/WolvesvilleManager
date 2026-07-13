@@ -69,4 +69,17 @@ public class CronJobOrgTranslatorTests
         Assert.Null(CronJobOrgTranslator.TryWarmupCron("3 0 * * *"));   // 00:03 → dia anterior
         Assert.Null(CronJobOrgTranslator.TryWarmupCron("*/15 14 * * *")); // minuto não é único
     }
+
+    [Fact]
+    public void Warmup_supports_hour_lists()
+    {
+        // Horários de retentativa do pular-espera: pré-aquece antes de cada tentativa.
+        Assert.Equal("55 17,19,21 * * MON,TUE,WED,THU,FRI",
+            CronJobOrgTranslator.TryWarmupCron("0 18,20,22 * * MON,TUE,WED,THU,FRI"));
+        Assert.Equal("58 13,17 * * SAT", CronJobOrgTranslator.TryWarmupCron("3 14,18 * * SAT"));
+        // Qualquer hora da lista virando o dia anterior anula o warmup inteiro.
+        Assert.Null(CronJobOrgTranslator.TryWarmupCron("0 0,12 * * *"));
+        // Lista com token não numérico (range) não é suportada.
+        Assert.Null(CronJobOrgTranslator.TryWarmupCron("0 18-22 * * *"));
+    }
 }
