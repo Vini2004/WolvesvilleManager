@@ -146,8 +146,10 @@ public class WolvesvilleApiClient : IWolvesvilleClient
 
         if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.NoContent)
             return null;
+        // [DIAG] Em vez de lançar (o erro vira 5xx e é mascarado pela infra), devolve as pistas
+        // dentro de um PlayerProfile 200 — o front mostra na bio. Removo depois de diagnosticar.
         if (!response.IsSuccessStatusCode)
-            throw new BusinessRuleException($"[DIAG] HTTP {(int)response.StatusCode} de /players/search: {Snippet(json)}");
+            return Diag($"HTTP {(int)response.StatusCode} de /players/search", json);
         if (string.IsNullOrWhiteSpace(json) || json.Trim() == "null")
             return null;
 
@@ -157,11 +159,15 @@ public class WolvesvilleApiClient : IWolvesvilleClient
         }
         catch (JsonException jex)
         {
-            throw new BusinessRuleException($"[DIAG] Falha ao ler o perfil: {jex.Message} || Resposta crua: {Snippet(json)}");
+            return Diag($"Falha ao desserializar: {jex.Message}", json);
         }
     }
 
-    private static string Snippet(string s) => s.Length <= 1200 ? s : s[..1200];
+    private static PlayerProfile Diag(string reason, string rawBody) => new()
+    {
+        Username = "[DIAG]",
+        PersonalMessage = $"{reason} || Resposta crua: {(rawBody.Length <= 1500 ? rawBody : rawBody[..1500])}",
+    };
 
     public Task<PlayerProfile> GetPlayerAsync(string apiKey, string playerId, CancellationToken ct = default) =>
         GetAsync<PlayerProfile>(apiKey, $"/players/{playerId}", ct);
