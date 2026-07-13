@@ -88,13 +88,13 @@ function PlayerSearch({ clanRegId }: { clanRegId: number }) {
               <div>
                 <div className="font-sans text-[15px] font-semibold text-ink">{player.username}</div>
                 <div className="font-sans text-xs text-faint">
-                  Nível {player.level < 0 ? '—' : player.level} · visto{' '}
+                  Nível {player.level == null || player.level < 0 ? '—' : player.level} · visto{' '}
                   {player.lastOnline ? fmtDate(player.lastOnline) : '—'}
                 </div>
               </div>
             </div>
             <div className="font-mono text-xs text-muted">
-              {player.clanId ? 'Tem clã' : 'Sem clã'} · {priv(player.rosesReceivedCount)} rosas
+              {player.clanId ? 'Tem clã' : 'Sem clã'} · {priv(player.receivedRosesCount)} rosas
             </div>
           </div>
           {player.personalMessage && (

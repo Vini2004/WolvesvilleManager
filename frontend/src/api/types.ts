@@ -181,11 +181,11 @@ export interface PlayerProfile {
   id: string
   username: string
   personalMessage: string | null
-  level: number
+  level: number | null
   status: string | null
   clanId: string | null
   lastOnline: string | null
-  rosesReceivedCount: number | null
+  receivedRosesCount: number | null
   profileIconColor: string | null
   gameStats: {
     totalWinCount: number | null

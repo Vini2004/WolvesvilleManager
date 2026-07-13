@@ -137,10 +137,16 @@ public class WolvesvilleApiClient : IWolvesvilleClient
     {
         try
         {
-            return await GetAsync<PlayerProfile>(
-                apiKey, $"/players/search?username={Uri.EscapeDataString(username)}", ct);
+            using var response = await SendRawAsync(apiKey, HttpMethod.Get,
+                $"/players/search?username={Uri.EscapeDataString(username)}", null, ct);
+            if (response.StatusCode == HttpStatusCode.NoContent) return null;
+
+            var json = await response.Content.ReadAsStringAsync(ct);
+            // A API às vezes responde 200 com corpo vazio/"null" quando não há jogador com o nome exato.
+            if (string.IsNullOrWhiteSpace(json) || json.Trim() == "null") return null;
+            return JsonSerializer.Deserialize<PlayerProfile>(json, JsonOptions);
         }
-        catch (WolvesvilleApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        catch (WolvesvilleApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
             return null;
         }
