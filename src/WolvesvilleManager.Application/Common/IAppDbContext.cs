@@ -15,6 +15,7 @@ public interface IAppDbContext
     DbSet<MemberXpSnapshot> MemberXpSnapshots { get; }
     DbSet<QuestPollVote> QuestPollVotes { get; }
     DbSet<QuestPollResult> QuestPollResults { get; }
+    DbSet<PollWindow> PollWindows { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

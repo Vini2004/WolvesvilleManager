@@ -10,10 +10,10 @@ namespace WolvesvilleManager.Application.Polls;
 /// <summary>Missão candidata no formulário, com a contagem atual de votos.</summary>
 public record PollQuestDto(string QuestId, string Name, string? ImageUrl, bool Gems, int Votes);
 
-/// <summary>O que a página pública vê: nome do clã, candidatas, o voto deste nick e o prazo.</summary>
+/// <summary>O que a página pública vê: nome do clã, candidatas, o voto deste nick e a próxima transição.</summary>
 public record PollDto(
     string ClanName, string? ClanTag, List<PollQuestDto> Quests, string? VotedQuestId,
-    DateTime? ExpiresAtUtc, bool IsClosed);
+    DateTime? NextBoundaryUtc, bool IsClosed);
 
 /// <summary>Uma rodada de votação já decidida (a automação já claimou ou embaralhou).</summary>
 public record PollHistoryEntryDto(string QuestName, int Votes, bool WasShuffle, DateTime DecidedAtUtc);
@@ -21,10 +21,22 @@ public record PollHistoryEntryDto(string QuestName, int Votes, bool WasShuffle, 
 /// <summary>Um voto individual da urna atual — só a aba admin vê quem votou em quê.</summary>
 public record PollVoterDto(string Nickname, string QuestId, string QuestName, bool WasShuffle);
 
-/// <summary>O que a aba admin vê: o link, a apuração, os votantes, o prazo e o histórico.</summary>
+/// <summary>
+/// Uma janela semanal recorrente de votação, para exibição/edição na aba admin. Dias no mesmo
+/// código de 3 letras usado no resto do app (SUN, MON, TUE, WED, THU, FRI, SAT); horários em "HH:mm".
+/// </summary>
+public record PollWindowDto(int Id, string StartDay, string StartTime, string EndDay, string EndTime);
+
+/// <summary>Entrada para configurar uma janela (sem Id — a lista inteira é substituída a cada salvamento).</summary>
+public record PollWindowInput(string StartDay, string StartTime, string EndDay, string EndTime);
+
+/// <summary>
+/// O que a aba admin vê: o link, a apuração, os votantes, a próxima transição, as janelas
+/// configuradas (se houver) e o histórico.
+/// </summary>
 public record PollAdminDto(
-    string Token, List<PollQuestDto> Quests, int TotalVotes, DateTime? ExpiresAtUtc, bool IsClosed,
-    List<PollHistoryEntryDto> History, string? CloseCronExpression, string? CloseTimeZoneId,
+    string Token, List<PollQuestDto> Quests, int TotalVotes, DateTime? NextBoundaryUtc, bool IsClosed,
+    List<PollHistoryEntryDto> History, List<PollWindowDto> Windows, string? WindowsTimeZoneId,
     List<PollVoterDto> Voters);
 
 /// <summary>Durações de prazo que a aba admin oferece — nunca "para sempre".</summary>
@@ -37,6 +49,22 @@ public enum PollDuration { SixHours, TwelveHours, OneDay, ThreeDays, SevenDays }
 /// </summary>
 public class QuestPollService
 {
+    private const string DefaultTimeZone = "America/Sao_Paulo";
+
+    private static readonly Dictionary<string, DayOfWeek> DayCodeToDayOfWeek = new()
+    {
+        ["SUN"] = DayOfWeek.Sunday,
+        ["MON"] = DayOfWeek.Monday,
+        ["TUE"] = DayOfWeek.Tuesday,
+        ["WED"] = DayOfWeek.Wednesday,
+        ["THU"] = DayOfWeek.Thursday,
+        ["FRI"] = DayOfWeek.Friday,
+        ["SAT"] = DayOfWeek.Saturday,
+    };
+
+    private static readonly Dictionary<DayOfWeek, string> DayOfWeekToCode =
+        DayCodeToDayOfWeek.ToDictionary(kv => kv.Value, kv => kv.Key);
+
     private readonly IAppDbContext _db;
     private readonly IWolvesvilleClient _api;
     private readonly IApiKeyProtector _protector;
@@ -86,9 +114,17 @@ public class QuestPollService
             .Take(20)
             .Select(r => new PollHistoryEntryDto(r.QuestName, r.Votes, r.WasShuffle, r.DecidedAtUtc))
             .ToListAsync(ct);
+
+        var windows = await LoadWindowsAsync(reg.Id, ct);
+        var tz = reg.PollWindowsTimeZoneId ?? DefaultTimeZone;
+        var isClosed = !IsOpenNow(reg, windows, tz);
+        var nextBoundary = windows.Count > 0
+            ? PollWindowCalculator.GetNextBoundaryUtc(windows, tz, DateTime.UtcNow)
+            : reg.PollExpiresAtUtc;
+
         return new PollAdminDto(
-            reg.PollToken, quests, currentVotes.Count, reg.PollExpiresAtUtc, IsClosed(reg), history,
-            reg.PollCloseCronExpression, reg.PollCloseTimeZoneId, voters);
+            reg.PollToken, quests, currentVotes.Count, nextBoundary, isClosed, history,
+            windows.Select(ToDto).ToList(), reg.PollWindowsTimeZoneId, voters);
     }
 
     /// <summary>Aba admin: zera a urna do clã.</summary>
@@ -101,8 +137,8 @@ public class QuestPollService
 
     /// <summary>
     /// Aba admin: define/estende o prazo a partir de agora (prazo manual, não se repete).
-    /// Desliga um prazo recorrente configurado antes, já que é uma escolha explícita do admin.
-    /// A votação nunca fica aberta para sempre — não existe opção de prazo indefinido.
+    /// Desliga janelas configuradas antes, já que é uma escolha explícita do admin de usar o
+    /// modo manual. A votação nunca fica aberta para sempre — não existe opção de prazo indefinido.
     /// </summary>
     public async Task<DateTime> SetExpirationAsync(int clanRegistrationId, PollDuration duration, CancellationToken ct = default)
     {
@@ -119,46 +155,64 @@ public class QuestPollService
             _ => throw new BusinessRuleException("Duração inválida."),
         };
         reg.PollExpiresAtUtc = DateTime.UtcNow.AddHours(hours);
-        reg.PollCloseCronExpression = null;
-        reg.PollCloseTimeZoneId = null;
+        await _db.PollWindows.Where(w => w.ClanRegistrationId == clanRegistrationId).ExecuteDeleteAsync(ct);
+        reg.PollWindowsTimeZoneId = null;
         await _db.SaveChangesAsync(ct);
         return reg.PollExpiresAtUtc.Value;
     }
 
     /// <summary>
-    /// Aba admin: prazo que se repete sozinho (ex.: toda segunda e quinta às 11h). Cada vez que
-    /// a automação "mais votada do formulário" decide a rodada, o prazo pula para a próxima
-    /// ocorrência automaticamente — não precisa de um segundo gatilho externo para "fechar",
-    /// só o cálculo da próxima ocorrência do cron a cada rodada decidida.
+    /// Aba admin: substitui a lista inteira de janelas semanais recorrentes (ex.: "domingo 23:00
+    /// até segunda 11:00" + "quarta 20:00 até quinta 11:00") — quantas o admin quiser. Quando
+    /// não vazia, o prazo manual (<see cref="PollExpiresAtUtc"/>) deixa de valer: o estado
+    /// aberto/fechado passa a ser calculado a partir das janelas.
     /// </summary>
-    public async Task<DateTime> SetRecurringCloseAsync(
-        int clanRegistrationId, string cronExpression, string timeZoneId, CancellationToken ct = default)
+    public async Task<List<PollWindowDto>> SetWindowsAsync(
+        int clanRegistrationId, List<PollWindowInput> windows, string timeZoneId, CancellationToken ct = default)
     {
-        if (!CronScheduleCalculator.IsValidCron(cronExpression))
-            throw new BusinessRuleException("Horário inválido.");
+        if (windows.Count == 0)
+            throw new BusinessRuleException("Defina pelo menos um ciclo de votação.");
         if (!CronScheduleCalculator.IsValidTimeZone(timeZoneId))
             throw new BusinessRuleException("Fuso horário inválido.");
 
         var reg = await _db.ClanRegistrations.FirstOrDefaultAsync(c => c.Id == clanRegistrationId, ct)
             ?? throw new NotFoundException($"Clã registrado #{clanRegistrationId} não encontrado.");
 
-        var next = CronScheduleCalculator.GetNextOccurrenceUtc(cronExpression, timeZoneId, DateTime.UtcNow)
-            ?? throw new BusinessRuleException("Não foi possível calcular a próxima ocorrência desse horário.");
+        var parsed = windows.Select(w =>
+        {
+            if (!DayCodeToDayOfWeek.TryGetValue(w.StartDay, out var startDay) ||
+                !DayCodeToDayOfWeek.TryGetValue(w.EndDay, out var endDay))
+                throw new BusinessRuleException("Dia da semana inválido.");
+            if (!TimeSpan.TryParse(w.StartTime, out var startTime) || !TimeSpan.TryParse(w.EndTime, out var endTime))
+                throw new BusinessRuleException("Horário inválido.");
+            if (startDay == endDay && startTime == endTime)
+                throw new BusinessRuleException("O início e o fim de um ciclo não podem ser iguais.");
 
-        reg.PollCloseCronExpression = cronExpression;
-        reg.PollCloseTimeZoneId = timeZoneId;
-        reg.PollExpiresAtUtc = next;
+            return new PollWindow
+            {
+                ClanRegistrationId = clanRegistrationId,
+                StartDayOfWeek = startDay,
+                StartTime = startTime,
+                EndDayOfWeek = endDay,
+                EndTime = endTime,
+            };
+        }).ToList();
+
+        await _db.PollWindows.Where(w => w.ClanRegistrationId == clanRegistrationId).ExecuteDeleteAsync(ct);
+        reg.PollWindowsTimeZoneId = timeZoneId;
+        _db.PollWindows.AddRange(parsed);
         await _db.SaveChangesAsync(ct);
-        return next;
+
+        return (await LoadWindowsAsync(clanRegistrationId, ct)).Select(ToDto).ToList();
     }
 
-    /// <summary>Aba admin: volta o prazo recorrente para manual (mantém o prazo atual até ser trocado).</summary>
-    public async Task ClearRecurringCloseAsync(int clanRegistrationId, CancellationToken ct = default)
+    /// <summary>Aba admin: remove todas as janelas configuradas, voltando ao prazo manual.</summary>
+    public async Task ClearWindowsAsync(int clanRegistrationId, CancellationToken ct = default)
     {
         var reg = await _db.ClanRegistrations.FirstOrDefaultAsync(c => c.Id == clanRegistrationId, ct)
             ?? throw new NotFoundException($"Clã registrado #{clanRegistrationId} não encontrado.");
-        reg.PollCloseCronExpression = null;
-        reg.PollCloseTimeZoneId = null;
+        await _db.PollWindows.Where(w => w.ClanRegistrationId == clanRegistrationId).ExecuteDeleteAsync(ct);
+        reg.PollWindowsTimeZoneId = null;
         await _db.SaveChangesAsync(ct);
     }
 
@@ -177,7 +231,14 @@ public class QuestPollService
                 .Select(v => v.QuestId)
                 .FirstOrDefaultAsync(ct);
 
-        return new PollDto(reg.ClanName, reg.ClanTag, quests, voted, reg.PollExpiresAtUtc, IsClosed(reg));
+        var windows = await LoadWindowsAsync(reg.Id, ct);
+        var tz = reg.PollWindowsTimeZoneId ?? DefaultTimeZone;
+        var isClosed = !IsOpenNow(reg, windows, tz);
+        var nextBoundary = windows.Count > 0
+            ? PollWindowCalculator.GetNextBoundaryUtc(windows, tz, DateTime.UtcNow)
+            : reg.PollExpiresAtUtc;
+
+        return new PollDto(reg.ClanName, reg.ClanTag, quests, voted, nextBoundary, isClosed);
     }
 
     /// <summary>Página pública: registra (ou troca) o voto desse nick.</summary>
@@ -191,7 +252,8 @@ public class QuestPollService
             throw new BusinessRuleException("Escolha uma missão para votar.");
 
         var reg = await ResolveByTokenAsync(token, ct);
-        if (IsClosed(reg))
+        var windows = await LoadWindowsAsync(reg.Id, ct);
+        if (!IsOpenNow(reg, windows, reg.PollWindowsTimeZoneId ?? DefaultTimeZone))
             throw new BusinessRuleException("A votação encerrou. Peça para o administrador do clã abrir um novo prazo.");
 
         // "Embaralhar" é sempre uma opção válida; missão de verdade precisa estar disponível agora
@@ -207,10 +269,18 @@ public class QuestPollService
         // Comparação case-insensitive: "Fulano" e "fulano" são o mesmo voto.
         var vote = await _db.QuestPollVotes
             .FirstOrDefaultAsync(v => v.ClanRegistrationId == reg.Id && v.Nickname.ToLower() == normalized, ct);
+        var now = DateTime.UtcNow;
         if (vote is null)
-            _db.QuestPollVotes.Add(new QuestPollVote { ClanRegistrationId = reg.Id, QuestId = questId, Nickname = nickname.Trim() });
+            _db.QuestPollVotes.Add(new QuestPollVote
+            {
+                ClanRegistrationId = reg.Id, QuestId = questId, Nickname = nickname.Trim(),
+                CreatedAtUtc = now, UpdatedAtUtc = now,
+            });
         else
+        {
             vote.QuestId = questId;
+            vote.UpdatedAtUtc = now;
+        }
 
         await _db.SaveChangesAsync(ct);
     }
@@ -222,8 +292,20 @@ public class QuestPollService
         return string.IsNullOrEmpty(trimmed) ? null : trimmed.ToLower();
     }
 
-    private static bool IsClosed(ClanRegistration reg) =>
-        reg.PollExpiresAtUtc is { } expires && DateTime.UtcNow >= expires;
+    private static bool IsOpenNow(ClanRegistration reg, List<PollWindow> windows, string timeZoneId) =>
+        windows.Count > 0
+            ? PollWindowCalculator.IsOpen(windows, timeZoneId, DateTime.UtcNow)
+            : reg.PollExpiresAtUtc is { } expires && DateTime.UtcNow < expires;
+
+    private async Task<List<PollWindow>> LoadWindowsAsync(int clanRegistrationId, CancellationToken ct) =>
+        await _db.PollWindows
+            .Where(w => w.ClanRegistrationId == clanRegistrationId)
+            .OrderBy(w => w.StartDayOfWeek).ThenBy(w => w.StartTime)
+            .ToListAsync(ct);
+
+    private static PollWindowDto ToDto(PollWindow w) => new(
+        w.Id, DayOfWeekToCode[w.StartDayOfWeek], w.StartTime.ToString(@"hh\:mm"),
+        DayOfWeekToCode[w.EndDayOfWeek], w.EndTime.ToString(@"hh\:mm"));
 
     private async Task<ClanRegistration> ResolveByTokenAsync(string token, CancellationToken ct)
     {

@@ -36,24 +36,30 @@ public class ClanRegistration
     public string? PollToken { get; set; }
 
     /// <summary>
-    /// Prazo da votação: depois disso o formulário público para de aceitar votos
-    /// novos (mas continua visível). Sempre definido junto com <see cref="PollToken"/> —
-    /// a votação nunca fica aberta indefinidamente.
+    /// Prazo manual da votação: depois disso o formulário público para de aceitar votos novos
+    /// (mas continua visível). Só vale enquanto <see cref="PollWindows"/> estiver vazia — assim
+    /// que o admin configura ao menos uma janela, o estado aberto/fechado passa a ser calculado
+    /// a partir delas, e este campo é ignorado.
     /// </summary>
     public DateTime? PollExpiresAtUtc { get; set; }
 
     /// <summary>
-    /// Expressão cron opcional (5 campos) para o prazo se repetir sozinho — ex.:
-    /// "0 11 * * MON,THU" fecha toda segunda e quinta às 11h. Quando definida, cada vez que
-    /// a automação "mais votada do formulário" decide a rodada, <see cref="PollExpiresAtUtc"/>
-    /// é recalculado para a próxima ocorrência, reabrindo a votação sozinha. Nula = prazo manual
-    /// (fixado por duração na aba admin, não se repete).
+    /// Janelas semanais recorrentes em que a votação fica aberta (ex.: domingo 23h–segunda 11h
+    /// e quarta 20h–quinta 11h). Quando não vazia, substitui o <see cref="PollExpiresAtUtc"/>
+    /// manual — o admin pode configurar quantas janelas quiser.
     /// </summary>
-    [MaxLength(100)]
-    public string? PollCloseCronExpression { get; set; }
+    public List<PollWindow> PollWindows { get; set; } = new();
 
+    /// <summary>Fuso horário (IANA) em que <see cref="PollWindows"/> é interpretada.</summary>
     [MaxLength(64)]
-    public string? PollCloseTimeZoneId { get; set; }
+    public string? PollWindowsTimeZoneId { get; set; }
+
+    /// <summary>
+    /// Fim (UTC) do último ciclo de <see cref="PollWindows"/> já apurado por uma automação
+    /// "mais votada do formulário" — evita que a mesma rodada seja aplicada duas vezes caso a
+    /// automação rode mais de uma vez antes do próximo ciclo terminar.
+    /// </summary>
+    public DateTime? PollLastClaimedWindowEndUtc { get; set; }
 
     public List<ScheduledTask> ScheduledTasks { get; set; } = new();
 }

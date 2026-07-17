@@ -33,4 +33,11 @@ public class QuestPollVote
     public string Nickname { get; set; } = string.Empty;
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Instante do voto atual (criação ou última troca de missão). Usado para determinar a qual
+    /// ciclo de <see cref="PollWindow"/> este voto pertence quando a automação apura só o último
+    /// ciclo concluído, em vez da urna inteira.
+    /// </summary>
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }

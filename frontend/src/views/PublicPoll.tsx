@@ -58,15 +58,20 @@ export function PublicPoll({ token }: { token: string }) {
               <div className="font-serif text-2xl font-semibold text-ink">{poll.data.clanName}</div>
               {poll.data.isClosed ? (
                 <div className="mt-1 font-sans text-[13px] font-bold text-danger">
-                  Votação encerrada — aguarde o clã abrir um novo prazo.
+                  Votação encerrada
+                  {timeLeft(poll.data.nextBoundaryUtc) ? (
+                    <> · reabre em {fmtDateTime(poll.data.nextBoundaryUtc)} ({timeLeft(poll.data.nextBoundaryUtc)})</>
+                  ) : (
+                    ' — aguarde o clã abrir um novo prazo.'
+                  )}
                 </div>
               ) : (
                 <div className="mt-1 font-sans text-[13px] text-muted">
                   Vote na próxima missão do clã · seu voto pode ser trocado até a apuração
-                  {timeLeft(poll.data.expiresAtUtc) && (
+                  {timeLeft(poll.data.nextBoundaryUtc) && (
                     <>
                       {' '}
-                      · encerra em {fmtDateTime(poll.data.expiresAtUtc)} ({timeLeft(poll.data.expiresAtUtc)})
+                      · encerra em {fmtDateTime(poll.data.nextBoundaryUtc)} ({timeLeft(poll.data.nextBoundaryUtc)})
                     </>
                   )}
                 </div>

@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using WolvesvilleManager.Application.Common;
+using WolvesvilleManager.Application.Polls;
 using WolvesvilleManager.Application.Quests;
 using WolvesvilleManager.Domain.Entities;
 using WolvesvilleManager.Domain.Exceptions;
@@ -185,10 +186,15 @@ public class ScheduledTaskExecutor
     }
 
     /// <summary>
-    /// Igual à mais votada, mas a urna é o formulário público (votos no nosso banco,
-    /// um por navegador) em vez dos votos de dentro do jogo. "Embaralhar missões" concorre
-    /// como mais uma candidata na mesma urna — se vencer, embaralha em vez de reivindicar.
-    /// Limpa a urna depois de qualquer resultado (missão iniciada ou embaralhado).
+    /// Igual à mais votada, mas a urna é o formulário público (votos no nosso banco, um por
+    /// nick) em vez dos votos de dentro do jogo. "Embaralhar missões" concorre como mais uma
+    /// candidata na mesma urna — se vencer, embaralha em vez de reivindicar.
+    ///
+    /// Se o clã tem janelas de votação configuradas (<see cref="PollWindow"/>), apura só o
+    /// ÚLTIMO CICLO já concluído (votos com <see cref="QuestPollVote.UpdatedAtUtc"/> dentro do
+    /// intervalo daquela janela) — não a urna inteira, que pode já ter votos do ciclo seguinte
+    /// se a votação reabriu antes desta automação rodar. Sem janelas configuradas (modo manual
+    /// por prazo fixo), mantém o comportamento antigo: apura e zera a urna inteira.
     /// </summary>
     private async Task<(TaskExecutionOutcome, string)> ClaimMostVotedFormQuestAsync(
         ScheduledTask task, string apiKey, string clanId, CancellationToken ct)
@@ -197,12 +203,32 @@ public class ScheduledTaskExecutor
         if (active is not null)
             return (TaskExecutionOutcome.Skipped, "Já existe uma missão ativa — nada a iniciar.");
 
+        var reg = task.ClanRegistration;
+        var windows = await _db.PollWindows
+            .Where(w => w.ClanRegistrationId == task.ClanRegistrationId)
+            .ToListAsync(ct);
+
+        DateTime? cycleStartUtc = null, cycleEndUtc = null;
+        if (windows.Count > 0)
+        {
+            var lastCycle = PollWindowCalculator.GetLastCompletedWindowUtc(
+                windows, reg.PollWindowsTimeZoneId ?? "America/Sao_Paulo", DateTime.UtcNow);
+            if (lastCycle is null)
+                return (TaskExecutionOutcome.Skipped, "Nenhum ciclo de votação foi concluído ainda.");
+            if (reg.PollLastClaimedWindowEndUtc is { } lastClaimed && lastCycle.Value.EndUtc <= lastClaimed)
+                return (TaskExecutionOutcome.Skipped, "Este ciclo já foi apurado — aguardando o próximo.");
+            (cycleStartUtc, cycleEndUtc) = lastCycle.Value;
+        }
+
         // Não corta na cara quando não há missão disponível: se a urna elegeu "embaralhar",
         // é exatamente essa situação (ou o gosto do clã) que ele resolve.
         var available = await GetAvailableQuestsSafeAsync(apiKey, clanId, ct);
 
-        var votes = await _db.QuestPollVotes
-            .Where(v => v.ClanRegistrationId == task.ClanRegistrationId)
+        var voteQuery = _db.QuestPollVotes.Where(v => v.ClanRegistrationId == task.ClanRegistrationId);
+        if (cycleStartUtc is not null)
+            voteQuery = voteQuery.Where(v => v.UpdatedAtUtc >= cycleStartUtc && v.UpdatedAtUtc < cycleEndUtc);
+
+        var votes = await voteQuery
             .GroupBy(v => v.QuestId)
             .Select(g => new { g.Key, Count = g.Count() })
             .ToDictionaryAsync(g => g.Key, g => g.Count, ct);
@@ -236,25 +262,23 @@ public class ScheduledTaskExecutor
         });
         await _db.SaveChangesAsync(ct);
 
-        // Urna limpa: a próxima rodada (de missões ou de embaralhar) começa do zero.
-        await _db.QuestPollVotes
-            .Where(v => v.ClanRegistrationId == task.ClanRegistrationId)
-            .ExecuteDeleteAsync(ct);
-
-        // Prazo recorrente configurado (ex.: toda segunda e quinta às 11h): reabre a votação
-        // sozinha, pulando para a próxima ocorrência — sem isso o formulário ficaria fechado
-        // até o admin mexer manualmente.
-        if (!string.IsNullOrEmpty(task.ClanRegistration.PollCloseCronExpression))
+        if (cycleStartUtc is not null)
         {
-            var next = CronScheduleCalculator.GetNextOccurrenceUtc(
-                task.ClanRegistration.PollCloseCronExpression,
-                task.ClanRegistration.PollCloseTimeZoneId ?? "America/Sao_Paulo",
-                DateTime.UtcNow);
-            if (next is not null)
-            {
-                task.ClanRegistration.PollExpiresAtUtc = next;
-                await _db.SaveChangesAsync(ct);
-            }
+            // Só zera os votos DESTE ciclo — votos já lançados no ciclo seguinte (se a janela já
+            // reabriu antes desta automação rodar) continuam na urna para a próxima apuração.
+            await _db.QuestPollVotes
+                .Where(v => v.ClanRegistrationId == task.ClanRegistrationId
+                            && v.UpdatedAtUtc >= cycleStartUtc && v.UpdatedAtUtc < cycleEndUtc)
+                .ExecuteDeleteAsync(ct);
+            reg.PollLastClaimedWindowEndUtc = cycleEndUtc;
+            await _db.SaveChangesAsync(ct);
+        }
+        else
+        {
+            // Modo manual (sem janelas configuradas): comportamento antigo — zera a urna inteira.
+            await _db.QuestPollVotes
+                .Where(v => v.ClanRegistrationId == task.ClanRegistrationId)
+                .ExecuteDeleteAsync(ct);
         }
 
         if (winner.Quest is null)

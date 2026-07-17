@@ -113,13 +113,13 @@ export interface PollQuest {
   votes: number
 }
 
-/** Página pública: candidatas + o voto deste navegador + o prazo. */
+/** Página pública: candidatas + o voto deste navegador + a próxima transição (abre/fecha). */
 export interface PollInfo {
   clanName: string
   clanTag: string | null
   quests: PollQuest[]
   votedQuestId: string | null
-  expiresAtUtc: string | null
+  nextBoundaryUtc: string | null
   isClosed: boolean
 }
 
@@ -139,16 +139,28 @@ export interface PollVoter {
   wasShuffle: boolean
 }
 
-/** Aba admin: link, apuração, votantes, prazo e histórico de rodadas anteriores. */
+/** Dia da semana no código de 3 letras usado nos ciclos de votação e no agendador de automações. */
+export type Weekday = 'SUN' | 'MON' | 'TUE' | 'WED' | 'THU' | 'FRI' | 'SAT'
+
+/** Um ciclo semanal recorrente de votação (ex.: domingo 23:00 até segunda 11:00). */
+export interface PollWindow {
+  id: number
+  startDay: Weekday
+  startTime: string
+  endDay: Weekday
+  endTime: string
+}
+
+/** Aba admin: link, apuração, votantes, próxima transição, ciclos configurados e histórico. */
 export interface PollAdmin {
   token: string
   quests: PollQuest[]
   totalVotes: number
-  expiresAtUtc: string | null
+  nextBoundaryUtc: string | null
   isClosed: boolean
   history: PollHistoryEntry[]
-  closeCronExpression: string | null
-  closeTimeZoneId: string | null
+  windows: PollWindow[]
+  windowsTimeZoneId: string | null
   voters: PollVoter[]
 }
 
