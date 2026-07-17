@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { POLL_DURATION_LABELS, SHUFFLE_OPTION_ID, type PollDuration } from '../api/types'
 import { ErrorBox, Loading, SectionTitle } from '../components/ui'
@@ -15,9 +15,29 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
   const [busy, setBusy] = useState(false)
   const [duration, setDuration] = useState<PollDuration>('OneDay')
   const [mode, setMode] = useState<'manual' | 'recurring'>('manual')
-  const [recurDays, setRecurDays] = useState<string[]>(['MON', 'THU'])
+  const [recurDays, setRecurDays] = useState<string[]>([])
   const [recurTime, setRecurTime] = useState('11:00')
   const [error, setError] = useState<string | null>(null)
+
+  // Sincroniza a aba/campos com o que está SALVO de verdade sempre que o cron recorrente muda
+  // (carregou a página, ou uma ação acabou de gravar) — sem isso, abrir a aba "Se repete" mostrava
+  // valores padrão em vez do que já estava configurado, e um clique em "Salvar" sobrescrevia um
+  // prazo fixo que o admin tinha acabado de definir.
+  const closeCron = poll.data?.closeCronExpression ?? null
+  useEffect(() => {
+    if (closeCron) {
+      const parsed = parseCron(closeCron)
+      if (parsed && parsed.frequency === 'weekly') {
+        setMode('recurring')
+        setRecurDays(parsed.days)
+        setRecurTime(parsed.time)
+        return
+      }
+    }
+    setMode('manual')
+    setRecurDays([])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closeCron])
 
   if (poll.loading) return <Loading />
   if (poll.error || !poll.data) return <ErrorBox message={poll.error ?? 'Erro.'} onRetry={poll.reload} />
@@ -54,6 +74,11 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
   }
 
   const extend = async () => {
+    if (
+      poll.data!.closeCronExpression &&
+      !window.confirm('Isso desliga o prazo recorrente atual e passa a usar um prazo fixo. Continuar?')
+    )
+      return
     setBusy(true)
     setError(null)
     try {
@@ -118,19 +143,31 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
       </div>
 
       <div className="card mb-7 px-7 py-[26px]">
-        <div className="mb-1 font-serif text-lg font-semibold text-ink">Prazo da votação</div>
-        <div className="mb-4 font-sans text-[13px] text-muted">
+        <div className="mb-4 font-serif text-lg font-semibold text-ink">Prazo da votação</div>
+
+        <div
+          className={`mb-5 rounded-xl border-2 px-5 py-4 ${
+            poll.data.isClosed
+              ? 'border-danger/50 bg-danger/10'
+              : 'border-violet/50 bg-violet/10'
+          }`}
+        >
+          <div className="font-sans text-[11px] font-bold uppercase tracking-[0.08em] text-faint">
+            Prazo definido
+          </div>
           {poll.data.isClosed ? (
-            <span className="font-bold text-danger">Votação encerrada — ninguém consegue votar até o prazo ser renovado.</span>
+            <div className="mt-1 font-sans text-[16px] font-bold text-danger">
+              🔒 Votação encerrada — ninguém consegue votar até o prazo ser renovado.
+            </div>
           ) : (
-            <>
-              Encerra em <span className="font-bold text-lav">{fmtDateTime(poll.data.expiresAtUtc)}</span>
-              {remaining && <> · faltam {remaining}</>}
-            </>
+            <div className="mt-1 font-sans text-[16px] font-bold text-ink">
+              Encerra em {fmtDateTime(poll.data.expiresAtUtc)}
+              {remaining && <span className="font-mono text-gold"> · faltam {remaining}</span>}
+            </div>
           )}
           {activeRecurringLabel && (
-            <div className="mt-1 font-sans text-[12px] text-faint">
-              {activeRecurringLabel} · reabre sozinha a cada rodada decidida
+            <div className="mt-1.5 font-sans text-[12.5px] text-lav">
+              🔁 {activeRecurringLabel} · reabre sozinha a cada rodada decidida
             </div>
           )}
         </div>
@@ -256,11 +293,16 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
         })}
       </div>
 
-      {poll.data.history.length > 0 && (
+      <div className="mb-3.5 mt-9">
+        <SectionTitle>Histórico de rodadas</SectionTitle>
+      </div>
+      {poll.data.history.length === 0 ? (
+        <div className="list-card px-5 py-4 font-sans text-[13px] text-muted">
+          Ainda vazio — só grava quando uma automação do tipo "Iniciar mais votada do formulário"
+          decide de fato uma rodada (inicia uma missão ou embaralha).
+        </div>
+      ) : (
         <>
-          <div className="mb-3.5 mt-9">
-            <SectionTitle>Histórico de rodadas</SectionTitle>
-          </div>
           <div className="flex flex-col gap-2">
             {poll.data.history.map((h, i) => (
               <div key={i} className="list-card flex items-center justify-between gap-4 px-5 py-3.5">

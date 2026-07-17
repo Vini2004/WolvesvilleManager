@@ -3,7 +3,7 @@ using WolvesvilleManager.Application.Polls;
 
 namespace WolvesvilleManager.Api.Controllers;
 
-public record VoteRequest(string QuestId, string VoterId);
+public record VoteRequest(string QuestId, string Nickname);
 public record SetExpirationRequest(PollDuration Duration);
 public record SetRecurringCloseRequest(string CronExpression, string TimeZoneId);
 
@@ -56,20 +56,20 @@ public class QuestPollController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Página pública: candidatas + voto atual deste navegador (via ?voterId=).</summary>
+    /// <summary>Página pública: candidatas + voto atual desse nick (via ?nickname=).</summary>
     [HttpGet("api/poll/{token}")]
-    public async Task<PollDto> GetPublic(string token, [FromQuery] string? voterId, CancellationToken ct) =>
-        await _service.GetPublicAsync(token, voterId, ct);
+    public async Task<PollDto> GetPublic(string token, [FromQuery] string? nickname, CancellationToken ct) =>
+        await _service.GetPublicAsync(token, nickname, ct);
 
     /// <summary>
-    /// Página pública: registra ou troca o voto deste navegador. "Embaralhar" também é
+    /// Página pública: registra ou troca o voto desse nick. "Embaralhar" também é
     /// votado aqui (QuestId = <see cref="Domain.Entities.QuestPollVote.ShuffleOptionId"/>) —
     /// não é uma ação imediata, é mais uma cédula na urna.
     /// </summary>
     [HttpPost("api/poll/{token}/vote")]
     public async Task<IActionResult> Vote(string token, [FromBody] VoteRequest request, CancellationToken ct)
     {
-        await _service.VoteAsync(token, request.QuestId, request.VoterId, ct);
+        await _service.VoteAsync(token, request.QuestId, request.Nickname, ct);
         return NoContent();
     }
 }

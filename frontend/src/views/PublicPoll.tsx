@@ -5,33 +5,37 @@ import { ErrorBox, Loading, Particles } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 import { fmtDateTime, timeLeft } from '../lib/format'
 
-const VOTER_STORAGE = 'wvm.voterId'
-
-/** Identificador anônimo deste navegador — a "cédula" da urna (1 voto por navegador). */
-function getVoterId(): string {
-  let id = localStorage.getItem(VOTER_STORAGE)
-  if (!id) {
-    id = crypto.randomUUID()
-    localStorage.setItem(VOTER_STORAGE, id)
-  }
-  return id
-}
+const NICKNAME_STORAGE = 'wvm.pollNickname'
 
 /**
  * Página pública do link /votar/{token}: só o formulário de votação, sem login e sem
- * nenhuma outra parte do app. Votar de novo troca o voto deste navegador.
+ * nenhuma outra parte do app. O voto é identificado pelo nick digitado — não por
+ * navegador, então trocar de navegador ou usar aba anônima não abre voto extra; votar
+ * de novo com o mesmo nick troca a escolha.
  */
 export function PublicPoll({ token }: { token: string }) {
-  const voterId = getVoterId()
-  const poll = useAsync(() => api.getPublicPoll(token, voterId), [token])
+  const [nickname, setNickname] = useState(() => localStorage.getItem(NICKNAME_STORAGE) ?? '')
+  const poll = useAsync(() => api.getPublicPoll(token, nickname), [token])
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const trimmedNickname = nickname.trim()
+
+  const checkNickname = () => {
+    localStorage.setItem(NICKNAME_STORAGE, nickname)
+    poll.reload()
+  }
+
   const vote = async (questId: string) => {
+    if (!trimmedNickname) {
+      setError('Digite seu nick do Wolvesville para votar.')
+      return
+    }
     setBusy(questId)
     setError(null)
     try {
-      await api.votePoll(token, questId, voterId)
+      localStorage.setItem(NICKNAME_STORAGE, nickname)
+      await api.votePoll(token, questId, trimmedNickname)
       poll.reload()
     } catch (e: unknown) {
       setError(e instanceof ApiError ? e.message : 'Erro inesperado.')
@@ -67,6 +71,20 @@ export function PublicPoll({ token }: { token: string }) {
                   )}
                 </div>
               )}
+            </div>
+
+            <div className="card mb-6 px-5 py-4">
+              <div className="field-label mb-1.5">Seu nick no Wolvesville</div>
+              <input
+                value={nickname}
+                onChange={(e) => setNickname(e.target.value.slice(0, 32))}
+                onBlur={checkNickname}
+                placeholder="Ex.: SeuNick"
+                className="input-dark"
+              />
+              <div className="mt-1.5 font-sans text-[11.5px] text-dim">
+                Usado só para impedir voto duplicado — um voto por nick, não por pessoa/dispositivo.
+              </div>
             </div>
 
             {error && (
@@ -111,7 +129,7 @@ export function PublicPoll({ token }: { token: string }) {
                         </div>
                         <button
                           onClick={() => vote(q.questId)}
-                          disabled={busy !== null || isVoted || poll.data!.isClosed}
+                          disabled={busy !== null || isVoted || poll.data!.isClosed || !trimmedNickname}
                           className={isVoted ? 'btn-secondary flex-none' : 'btn-primary flex-none'}
                         >
                           {isVoted ? '✓ Seu voto' : busy === q.questId ? 'Votando…' : 'Votar nesta'}
@@ -120,10 +138,6 @@ export function PublicPoll({ token }: { token: string }) {
                     </div>
                   )
               })}
-            </div>
-
-            <div className="mt-8 text-center font-sans text-[11.5px] text-dim">
-              Wolvesville Manager · um voto por navegador
             </div>
           </>
         )}

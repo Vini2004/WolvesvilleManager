@@ -10,7 +10,7 @@ namespace WolvesvilleManager.Application.Polls;
 /// <summary>Missão candidata no formulário, com a contagem atual de votos.</summary>
 public record PollQuestDto(string QuestId, string Name, string? ImageUrl, bool Gems, int Votes);
 
-/// <summary>O que a página pública vê: nome do clã, candidatas, o voto deste navegador e o prazo.</summary>
+/// <summary>O que a página pública vê: nome do clã, candidatas, o voto deste nick e o prazo.</summary>
 public record PollDto(
     string ClanName, string? ClanTag, List<PollQuestDto> Quests, string? VotedQuestId,
     DateTime? ExpiresAtUtc, bool IsClosed);
@@ -28,7 +28,8 @@ public enum PollDuration { SixHours, TwelveHours, OneDay, ThreeDays, SevenDays }
 
 /// <summary>
 /// Formulário público de votação de missões. O token do link é a única credencial da
-/// página pública; o VoterId (gerado pelo navegador) limita a um voto por navegador.
+/// página pública; o nick digitado limita a um voto por nick (case-insensitive) — não
+/// por navegador, então trocar de navegador ou usar aba anônima não abre voto extra.
 /// </summary>
 public class QuestPollService
 {
@@ -141,28 +142,31 @@ public class QuestPollService
         await _db.SaveChangesAsync(ct);
     }
 
-    /// <summary>Página pública: candidatas + o voto já registrado por este navegador.</summary>
-    public async Task<PollDto> GetPublicAsync(string token, string? voterId, CancellationToken ct = default)
+    /// <summary>Página pública: candidatas + o voto já registrado por esse nick (se informado).</summary>
+    public async Task<PollDto> GetPublicAsync(string token, string? nickname, CancellationToken ct = default)
     {
         var reg = await ResolveByTokenAsync(token, ct);
         var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
         var quests = await BuildQuestsAsync(reg.Id, apiKey, reg.ClanId, ct);
 
         string? voted = null;
-        if (!string.IsNullOrEmpty(voterId))
+        var normalized = NormalizeNickname(nickname);
+        if (normalized is not null)
             voted = await _db.QuestPollVotes
-                .Where(v => v.ClanRegistrationId == reg.Id && v.VoterId == voterId)
+                .Where(v => v.ClanRegistrationId == reg.Id && v.Nickname.ToLower() == normalized)
                 .Select(v => v.QuestId)
                 .FirstOrDefaultAsync(ct);
 
         return new PollDto(reg.ClanName, reg.ClanTag, quests, voted, reg.PollExpiresAtUtc, IsClosed(reg));
     }
 
-    /// <summary>Página pública: registra (ou troca) o voto deste navegador.</summary>
-    public async Task VoteAsync(string token, string questId, string voterId, CancellationToken ct = default)
+    /// <summary>Página pública: registra (ou troca) o voto desse nick.</summary>
+    public async Task VoteAsync(string token, string questId, string nickname, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(voterId) || voterId.Length > 64)
-            throw new BusinessRuleException("Identificador de votante inválido.");
+        var normalized = NormalizeNickname(nickname)
+            ?? throw new BusinessRuleException("Digite seu nick do Wolvesville para votar.");
+        if (nickname.Trim().Length > 32)
+            throw new BusinessRuleException("Nick muito longo (máximo 32 caracteres).");
         if (string.IsNullOrWhiteSpace(questId))
             throw new BusinessRuleException("Escolha uma missão para votar.");
 
@@ -180,14 +184,22 @@ public class QuestPollService
                 throw new BusinessRuleException("Essa missão não está mais disponível — recarregue a página.");
         }
 
+        // Comparação case-insensitive: "Fulano" e "fulano" são o mesmo voto.
         var vote = await _db.QuestPollVotes
-            .FirstOrDefaultAsync(v => v.ClanRegistrationId == reg.Id && v.VoterId == voterId, ct);
+            .FirstOrDefaultAsync(v => v.ClanRegistrationId == reg.Id && v.Nickname.ToLower() == normalized, ct);
         if (vote is null)
-            _db.QuestPollVotes.Add(new QuestPollVote { ClanRegistrationId = reg.Id, QuestId = questId, VoterId = voterId });
+            _db.QuestPollVotes.Add(new QuestPollVote { ClanRegistrationId = reg.Id, QuestId = questId, Nickname = nickname.Trim() });
         else
             vote.QuestId = questId;
 
         await _db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Nulo se vazio/só espaços; senão o nick aparado e em minúsculas, para comparação.</summary>
+    private static string? NormalizeNickname(string? nickname)
+    {
+        var trimmed = nickname?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? null : trimmed.ToLower();
     }
 
     private static bool IsClosed(ClanRegistration reg) =>

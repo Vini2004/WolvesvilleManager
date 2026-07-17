@@ -19,8 +19,10 @@ public class AppDbContext : DbContext, IAppDbContext
     {
         modelBuilder.Entity<QuestPollVote>(e =>
         {
-            // Um voto por navegador por clã; votar de novo troca a missão (upsert).
-            e.HasIndex(v => new { v.ClanRegistrationId, v.VoterId }).IsUnique();
+            // Um voto por nick por clã (comparação case-insensitive feita no serviço); votar de
+            // novo com o mesmo nick troca a missão (upsert). Índice é rede de segurança para
+            // duplicata exata — a deduplicação por maiúsculas/minúsculas acontece na aplicação.
+            e.HasIndex(v => new { v.ClanRegistrationId, v.Nickname }).IsUnique();
             e.HasOne(v => v.ClanRegistration)
                 .WithMany()
                 .HasForeignKey(v => v.ClanRegistrationId)

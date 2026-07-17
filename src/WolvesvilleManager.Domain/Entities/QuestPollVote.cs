@@ -3,9 +3,10 @@ using System.ComponentModel.DataAnnotations;
 namespace WolvesvilleManager.Domain.Entities;
 
 /// <summary>
-/// Voto do formulário público de missões. Cada navegador gera um VoterId anônimo
-/// (guardado no localStorage) e pode ter no máximo um voto por clã — votar de novo
-/// troca a missão escolhida. Não identifica ninguém: é urna de clã, não eleição.
+/// Voto do formulário público de missões. Identificado pelo nick digitado por quem vota
+/// (não por navegador — trocar de navegador ou aba anônima não abre um voto extra, já que
+/// a comparação é por nick, não por dispositivo). Votar de novo com o mesmo nick troca a
+/// missão escolhida. Não é uma eleição de verdade: não confere se o nick existe no clã.
 /// </summary>
 public class QuestPollVote
 {
@@ -26,10 +27,10 @@ public class QuestPollVote
     [MaxLength(64)]
     public string QuestId { get; set; } = string.Empty;
 
-    /// <summary>Identificador anônimo do navegador que votou.</summary>
+    /// <summary>Nick digitado por quem votou (como digitado — a comparação de duplicidade ignora maiúsculas).</summary>
     [Required]
-    [MaxLength(64)]
-    public string VoterId { get; set; } = string.Empty;
+    [MaxLength(32)]
+    public string Nickname { get; set; } = string.Empty;
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 }
