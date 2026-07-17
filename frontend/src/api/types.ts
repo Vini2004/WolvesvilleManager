@@ -244,6 +244,12 @@ export interface ChatMessage {
   date: string | null
 }
 
+/** Configuração da mensagem automática de boas-vindas (aba Chat). */
+export interface WelcomeSettings {
+  enabled: boolean
+  template: string
+}
+
 export interface LedgerEntry {
   id: string | null
   playerId: string | null

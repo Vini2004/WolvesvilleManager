@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using WolvesvilleManager.Application.Common;
 using WolvesvilleManager.Application.Polls;
 using WolvesvilleManager.Application.Quests;
+using WolvesvilleManager.Application.Social;
 using WolvesvilleManager.Domain.Entities;
 using WolvesvilleManager.Domain.Exceptions;
 using WolvesvilleManager.Domain.Interfaces;
@@ -94,6 +95,7 @@ public class ScheduledTaskExecutor
             await _db.SaveChangesAsync(ct);
 
         await SnapshotMemberXpAsync(ct);
+        await WelcomeNewMembersAsync(ct);
 
         return dueTasks.Count;
     }
@@ -140,6 +142,67 @@ public class ScheduledTaskExecutor
             }
         }
     }
+
+    /// <summary>
+    /// Manda a mensagem de boas-vindas no chat para quem entrou no clã desde a última checagem —
+    /// só para clãs com <see cref="ClanRegistration.WelcomeMessageEnabled"/> ligado. Detecta a
+    /// entrada pelo log de auditoria (ação "JOIN"/"ACCEPT_INVITE"), não por uma lista de membros;
+    /// mora aqui pelo mesmo motivo do snapshot de XP acima — é o ponto executado com regularidade
+    /// garantida (BackgroundService + cron externo).
+    /// </summary>
+    private async Task WelcomeNewMembersAsync(CancellationToken ct)
+    {
+        var clans = await _db.ClanRegistrations.Where(c => c.WelcomeMessageEnabled).ToListAsync(ct);
+
+        foreach (var reg in clans)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            try
+            {
+                var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
+                var logs = await _api.GetLogsAsync(apiKey, reg.ClanId, ct);
+
+                var joins = logs
+                    .Where(l => l.Action is "JOIN" or "ACCEPT_INVITE")
+                    .Select(l => (Entry: l, At: ParseLogTime(l.CreationTime)))
+                    .Where(x => x.At is not null)
+                    .OrderBy(x => x.At)
+                    .ToList();
+
+                if (reg.LastWelcomedJoinAtUtc is null)
+                {
+                    // 1ª checagem depois de ligar a feature: só marca a régua a partir de agora —
+                    // não manda boas-vindas retroativas para quem já estava no clã.
+                    reg.LastWelcomedJoinAtUtc = joins.Count > 0 ? joins[^1].At : DateTime.UtcNow;
+                    await _db.SaveChangesAsync(ct);
+                    continue;
+                }
+
+                var pending = joins.Where(x => x.At > reg.LastWelcomedJoinAtUtc).ToList();
+                foreach (var (entry, at) in pending)
+                {
+                    if (!string.IsNullOrWhiteSpace(entry.PlayerUsername))
+                    {
+                        var template = reg.WelcomeMessageTemplate ?? ClanSocialService.DefaultWelcomeMessageTemplate;
+                        var message = template.Replace("{mention}", $"@{entry.PlayerUsername}");
+                        await _api.SendChatMessageAsync(apiKey, reg.ClanId, message, ct);
+                    }
+                    // Sempre avança a régua, mesmo sem username (log incompleto) — senão a
+                    // mesma entrada tentaria de novo em toda checagem futura.
+                    reg.LastWelcomedJoinAtUtc = at;
+                    await _db.SaveChangesAsync(ct);
+                }
+            }
+            catch (Exception ex) when (ex is WolvesvilleApiException or HttpRequestException or ApiKeyUnprotectException)
+            {
+                _logger.LogWarning(ex, "Boas-vindas do clã {Clan} falharam.", reg.ClanName);
+            }
+        }
+    }
+
+    private static DateTime? ParseLogTime(string? raw) =>
+        DateTimeOffset.TryParse(raw, out var parsed) ? parsed.UtcDateTime : null;
 
     private async Task<(TaskExecutionOutcome Outcome, string Message, DateTime? NextRunOverrideUtc)> ExecuteAsync(
         ScheduledTask task, string apiKey, CancellationToken ct)

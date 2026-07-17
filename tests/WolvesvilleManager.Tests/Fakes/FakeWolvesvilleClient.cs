@@ -25,6 +25,9 @@ public class FakeWolvesvilleClient : IWolvesvilleClient
     public bool SkippedWaitingTime { get; private set; }
     public bool ClaimedExtraTime { get; private set; }
 
+    public List<ClanLogEntry> Logs { get; set; } = new();
+    public List<string> SentChatMessages { get; } = new();
+
     public Task<ActiveQuest?> GetActiveQuestAsync(string apiKey, string clanId, CancellationToken ct = default) =>
         ThrowNotFoundOnActiveQuest
             ? throw new WolvesvilleApiException(HttpStatusCode.NotFound, "Not Found")
@@ -106,8 +109,11 @@ public class FakeWolvesvilleClient : IWolvesvilleClient
     public Task<List<ChatMessage>> GetChatAsync(string apiKey, string clanId, CancellationToken ct = default) =>
         Task.FromResult(new List<ChatMessage>());
 
-    public Task SendChatMessageAsync(string apiKey, string clanId, string message, CancellationToken ct = default) =>
-        Task.CompletedTask;
+    public Task SendChatMessageAsync(string apiKey, string clanId, string message, CancellationToken ct = default)
+    {
+        SentChatMessages.Add(message);
+        return Task.CompletedTask;
+    }
 
     public Task<List<ClanAnnouncement>> GetAnnouncementsAsync(string apiKey, string clanId, CancellationToken ct = default) =>
         Task.FromResult(new List<ClanAnnouncement>());
@@ -119,7 +125,7 @@ public class FakeWolvesvilleClient : IWolvesvilleClient
         Task.FromResult(new List<LedgerEntry>());
 
     public Task<List<ClanLogEntry>> GetLogsAsync(string apiKey, string clanId, CancellationToken ct = default) =>
-        Task.FromResult(new List<ClanLogEntry>());
+        Task.FromResult(Logs);
 
     public Task SetMemberFlairAsync(string apiKey, string clanId, string playerId, string flair, CancellationToken ct = default) =>
         Task.CompletedTask;
