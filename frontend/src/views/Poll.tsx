@@ -268,6 +268,7 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
       <div className="flex flex-col gap-3">
         {poll.data.quests.map((q) => {
           const isShuffle = q.questId === SHUFFLE_OPTION_ID
+          const voters = poll.data!.voters.filter((v) => v.questId === q.questId)
           return (
             <div key={q.questId} className="list-card px-5 py-4">
               <div className="flex items-center justify-between gap-4">
@@ -288,6 +289,11 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
                   style={{ width: `${(q.votes / max) * 100}%` }}
                 />
               </div>
+              {voters.length > 0 && (
+                <div className="mt-2.5 font-sans text-[12px] leading-relaxed text-lav">
+                  {voters.map((v) => v.nickname).join(', ')}
+                </div>
+              )}
             </div>
           )
         })}

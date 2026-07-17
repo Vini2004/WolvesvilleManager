@@ -18,10 +18,14 @@ public record PollDto(
 /// <summary>Uma rodada de votação já decidida (a automação já claimou ou embaralhou).</summary>
 public record PollHistoryEntryDto(string QuestName, int Votes, bool WasShuffle, DateTime DecidedAtUtc);
 
-/// <summary>O que a aba admin vê: o link, a apuração, o prazo e o histórico de rodadas anteriores.</summary>
+/// <summary>Um voto individual da urna atual — só a aba admin vê quem votou em quê.</summary>
+public record PollVoterDto(string Nickname, string QuestId, string QuestName, bool WasShuffle);
+
+/// <summary>O que a aba admin vê: o link, a apuração, os votantes, o prazo e o histórico.</summary>
 public record PollAdminDto(
     string Token, List<PollQuestDto> Quests, int TotalVotes, DateTime? ExpiresAtUtc, bool IsClosed,
-    List<PollHistoryEntryDto> History, string? CloseCronExpression, string? CloseTimeZoneId);
+    List<PollHistoryEntryDto> History, string? CloseCronExpression, string? CloseTimeZoneId,
+    List<PollVoterDto> Voters);
 
 /// <summary>Durações de prazo que a aba admin oferece — nunca "para sempre".</summary>
 public enum PollDuration { SixHours, TwelveHours, OneDay, ThreeDays, SevenDays }
@@ -59,7 +63,23 @@ public class QuestPollService
 
         var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
         var quests = await BuildQuestsAsync(reg.Id, apiKey, reg.ClanId, ct);
-        var total = await _db.QuestPollVotes.CountAsync(v => v.ClanRegistrationId == reg.Id, ct);
+        var questNames = quests.ToDictionary(q => q.QuestId, q => q.Name);
+
+        var currentVotes = await _db.QuestPollVotes
+            .Where(v => v.ClanRegistrationId == reg.Id)
+            .OrderBy(v => v.Nickname)
+            .Select(v => new { v.Nickname, v.QuestId })
+            .ToListAsync(ct);
+        // Nome resolvido pela lista de disponíveis agora; se a missão votada saiu de cartaz
+        // nesse intervalo, mostra o id cru em vez de quebrar (raro, mas não deve derrubar a tela).
+        var voters = currentVotes
+            .Select(v => new PollVoterDto(
+                v.Nickname,
+                v.QuestId,
+                questNames.GetValueOrDefault(v.QuestId, v.QuestId),
+                v.QuestId == QuestPollVote.ShuffleOptionId))
+            .ToList();
+
         var history = await _db.QuestPollResults
             .Where(r => r.ClanRegistrationId == reg.Id)
             .OrderByDescending(r => r.DecidedAtUtc)
@@ -67,8 +87,8 @@ public class QuestPollService
             .Select(r => new PollHistoryEntryDto(r.QuestName, r.Votes, r.WasShuffle, r.DecidedAtUtc))
             .ToListAsync(ct);
         return new PollAdminDto(
-            reg.PollToken, quests, total, reg.PollExpiresAtUtc, IsClosed(reg), history,
-            reg.PollCloseCronExpression, reg.PollCloseTimeZoneId);
+            reg.PollToken, quests, currentVotes.Count, reg.PollExpiresAtUtc, IsClosed(reg), history,
+            reg.PollCloseCronExpression, reg.PollCloseTimeZoneId, voters);
     }
 
     /// <summary>Aba admin: zera a urna do clã.</summary>

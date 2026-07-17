@@ -131,7 +131,15 @@ export interface PollHistoryEntry {
   decidedAtUtc: string
 }
 
-/** Aba admin: link, apuração, prazo e histórico de rodadas anteriores. */
+/** Um voto individual da urna atual — só a aba admin vê. */
+export interface PollVoter {
+  nickname: string
+  questId: string
+  questName: string
+  wasShuffle: boolean
+}
+
+/** Aba admin: link, apuração, votantes, prazo e histórico de rodadas anteriores. */
 export interface PollAdmin {
   token: string
   quests: PollQuest[]
@@ -141,6 +149,7 @@ export interface PollAdmin {
   history: PollHistoryEntry[]
   closeCronExpression: string | null
   closeTimeZoneId: string | null
+  voters: PollVoter[]
 }
 
 /** Durações de prazo oferecidas na aba admin — mesmos valores do enum PollDuration do backend. */
