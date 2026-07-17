@@ -241,6 +241,22 @@ public class ScheduledTaskExecutor
             .Where(v => v.ClanRegistrationId == task.ClanRegistrationId)
             .ExecuteDeleteAsync(ct);
 
+        // Prazo recorrente configurado (ex.: toda segunda e quinta às 11h): reabre a votação
+        // sozinha, pulando para a próxima ocorrência — sem isso o formulário ficaria fechado
+        // até o admin mexer manualmente.
+        if (!string.IsNullOrEmpty(task.ClanRegistration.PollCloseCronExpression))
+        {
+            var next = CronScheduleCalculator.GetNextOccurrenceUtc(
+                task.ClanRegistration.PollCloseCronExpression,
+                task.ClanRegistration.PollCloseTimeZoneId ?? "America/Sao_Paulo",
+                DateTime.UtcNow);
+            if (next is not null)
+            {
+                task.ClanRegistration.PollExpiresAtUtc = next;
+                await _db.SaveChangesAsync(ct);
+            }
+        }
+
         if (winner.Quest is null)
         {
             await _api.ShuffleQuestsAsync(apiKey, clanId, ct);

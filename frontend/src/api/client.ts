@@ -209,6 +209,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ duration }),
     }),
+  setPollRecurringClose: (clanId: number, cronExpression: string, timeZoneId: string) =>
+    request<{ expiresAtUtc: string }>(`/api/clans/${clanId}/poll/recurring-close`, {
+      method: 'POST',
+      body: JSON.stringify({ cronExpression, timeZoneId }),
+    }),
+  clearPollRecurringClose: (clanId: number) =>
+    request<void>(`/api/clans/${clanId}/poll/recurring-close`, { method: 'DELETE' }),
   // Rotas públicas: o backend não exige X-Api-Key em /api/poll/* (o token do link é a credencial).
   getPublicPoll: (token: string, voterId: string) =>
     request<PollInfo>(`/api/poll/${token}?voterId=${encodeURIComponent(voterId)}`),

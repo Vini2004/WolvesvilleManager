@@ -5,6 +5,7 @@ namespace WolvesvilleManager.Api.Controllers;
 
 public record VoteRequest(string QuestId, string VoterId);
 public record SetExpirationRequest(PollDuration Duration);
+public record SetRecurringCloseRequest(string CronExpression, string TimeZoneId);
 
 /// <summary>
 /// Formulário público de votação de missões. As rotas /api/poll/* são as ÚNICAS
@@ -31,12 +32,28 @@ public class QuestPollController : ControllerBase
         return NoContent();
     }
 
-    /// <summary>Aba admin: define/estende o prazo da votação a partir de agora.</summary>
+    /// <summary>Aba admin: define/estende o prazo da votação a partir de agora (manual, não se repete).</summary>
     [HttpPost("api/clans/{id:int}/poll/expiration")]
     public async Task<object> SetExpiration(int id, [FromBody] SetExpirationRequest request, CancellationToken ct)
     {
         var expiresAtUtc = await _service.SetExpirationAsync(id, request.Duration, ct);
         return new { expiresAtUtc };
+    }
+
+    /// <summary>Aba admin: prazo recorrente (ex.: toda segunda e quinta às 11h) — reabre sozinho a cada rodada decidida.</summary>
+    [HttpPost("api/clans/{id:int}/poll/recurring-close")]
+    public async Task<object> SetRecurringClose(int id, [FromBody] SetRecurringCloseRequest request, CancellationToken ct)
+    {
+        var expiresAtUtc = await _service.SetRecurringCloseAsync(id, request.CronExpression, request.TimeZoneId, ct);
+        return new { expiresAtUtc };
+    }
+
+    /// <summary>Aba admin: volta o prazo recorrente para manual.</summary>
+    [HttpDelete("api/clans/{id:int}/poll/recurring-close")]
+    public async Task<IActionResult> ClearRecurringClose(int id, CancellationToken ct)
+    {
+        await _service.ClearRecurringCloseAsync(id, ct);
+        return NoContent();
     }
 
     /// <summary>Página pública: candidatas + voto atual deste navegador (via ?voterId=).</summary>

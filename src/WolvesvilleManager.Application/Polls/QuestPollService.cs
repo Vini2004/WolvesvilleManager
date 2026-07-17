@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using WolvesvilleManager.Application.Common;
+using WolvesvilleManager.Application.Scheduling;
 using WolvesvilleManager.Domain.Entities;
 using WolvesvilleManager.Domain.Interfaces;
 
@@ -20,7 +21,7 @@ public record PollHistoryEntryDto(string QuestName, int Votes, bool WasShuffle, 
 /// <summary>O que a aba admin vê: o link, a apuração, o prazo e o histórico de rodadas anteriores.</summary>
 public record PollAdminDto(
     string Token, List<PollQuestDto> Quests, int TotalVotes, DateTime? ExpiresAtUtc, bool IsClosed,
-    List<PollHistoryEntryDto> History);
+    List<PollHistoryEntryDto> History, string? CloseCronExpression, string? CloseTimeZoneId);
 
 /// <summary>Durações de prazo que a aba admin oferece — nunca "para sempre".</summary>
 public enum PollDuration { SixHours, TwelveHours, OneDay, ThreeDays, SevenDays }
@@ -64,7 +65,9 @@ public class QuestPollService
             .Take(20)
             .Select(r => new PollHistoryEntryDto(r.QuestName, r.Votes, r.WasShuffle, r.DecidedAtUtc))
             .ToListAsync(ct);
-        return new PollAdminDto(reg.PollToken, quests, total, reg.PollExpiresAtUtc, IsClosed(reg), history);
+        return new PollAdminDto(
+            reg.PollToken, quests, total, reg.PollExpiresAtUtc, IsClosed(reg), history,
+            reg.PollCloseCronExpression, reg.PollCloseTimeZoneId);
     }
 
     /// <summary>Aba admin: zera a urna do clã.</summary>
@@ -76,8 +79,9 @@ public class QuestPollService
     }
 
     /// <summary>
-    /// Aba admin: define/estende o prazo a partir de agora. A votação nunca fica aberta para
-    /// sempre — não existe opção de prazo indefinido, só durações fixas.
+    /// Aba admin: define/estende o prazo a partir de agora (prazo manual, não se repete).
+    /// Desliga um prazo recorrente configurado antes, já que é uma escolha explícita do admin.
+    /// A votação nunca fica aberta para sempre — não existe opção de prazo indefinido.
     /// </summary>
     public async Task<DateTime> SetExpirationAsync(int clanRegistrationId, PollDuration duration, CancellationToken ct = default)
     {
@@ -94,8 +98,47 @@ public class QuestPollService
             _ => throw new BusinessRuleException("Duração inválida."),
         };
         reg.PollExpiresAtUtc = DateTime.UtcNow.AddHours(hours);
+        reg.PollCloseCronExpression = null;
+        reg.PollCloseTimeZoneId = null;
         await _db.SaveChangesAsync(ct);
         return reg.PollExpiresAtUtc.Value;
+    }
+
+    /// <summary>
+    /// Aba admin: prazo que se repete sozinho (ex.: toda segunda e quinta às 11h). Cada vez que
+    /// a automação "mais votada do formulário" decide a rodada, o prazo pula para a próxima
+    /// ocorrência automaticamente — não precisa de um segundo gatilho externo para "fechar",
+    /// só o cálculo da próxima ocorrência do cron a cada rodada decidida.
+    /// </summary>
+    public async Task<DateTime> SetRecurringCloseAsync(
+        int clanRegistrationId, string cronExpression, string timeZoneId, CancellationToken ct = default)
+    {
+        if (!CronScheduleCalculator.IsValidCron(cronExpression))
+            throw new BusinessRuleException("Horário inválido.");
+        if (!CronScheduleCalculator.IsValidTimeZone(timeZoneId))
+            throw new BusinessRuleException("Fuso horário inválido.");
+
+        var reg = await _db.ClanRegistrations.FirstOrDefaultAsync(c => c.Id == clanRegistrationId, ct)
+            ?? throw new NotFoundException($"Clã registrado #{clanRegistrationId} não encontrado.");
+
+        var next = CronScheduleCalculator.GetNextOccurrenceUtc(cronExpression, timeZoneId, DateTime.UtcNow)
+            ?? throw new BusinessRuleException("Não foi possível calcular a próxima ocorrência desse horário.");
+
+        reg.PollCloseCronExpression = cronExpression;
+        reg.PollCloseTimeZoneId = timeZoneId;
+        reg.PollExpiresAtUtc = next;
+        await _db.SaveChangesAsync(ct);
+        return next;
+    }
+
+    /// <summary>Aba admin: volta o prazo recorrente para manual (mantém o prazo atual até ser trocado).</summary>
+    public async Task ClearRecurringCloseAsync(int clanRegistrationId, CancellationToken ct = default)
+    {
+        var reg = await _db.ClanRegistrations.FirstOrDefaultAsync(c => c.Id == clanRegistrationId, ct)
+            ?? throw new NotFoundException($"Clã registrado #{clanRegistrationId} não encontrado.");
+        reg.PollCloseCronExpression = null;
+        reg.PollCloseTimeZoneId = null;
+        await _db.SaveChangesAsync(ct);
     }
 
     /// <summary>Página pública: candidatas + o voto já registrado por este navegador.</summary>

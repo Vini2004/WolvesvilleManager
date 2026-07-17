@@ -4,6 +4,9 @@ import { POLL_DURATION_LABELS, SHUFFLE_OPTION_ID, type PollDuration } from '../a
 import { ErrorBox, Loading, SectionTitle } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 import { fmtDateTime, timeLeft } from '../lib/format'
+import { buildCron, parseCron, WEEKDAY_OPTIONS } from '../lib/cron'
+
+const POLL_TIMEZONE = 'America/Sao_Paulo'
 
 /** Aba admin: link compartilhável do formulário público + apuração em tempo real. */
 export function Poll({ clanRegId }: { clanRegId: number }) {
@@ -11,6 +14,9 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
   const [duration, setDuration] = useState<PollDuration>('OneDay')
+  const [mode, setMode] = useState<'manual' | 'recurring'>('manual')
+  const [recurDays, setRecurDays] = useState<string[]>(['MON', 'THU'])
+  const [recurTime, setRecurTime] = useState('11:00')
   const [error, setError] = useState<string | null>(null)
 
   if (poll.loading) return <Loading />
@@ -20,6 +26,12 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
   const totalShown = poll.data.quests.reduce((sum, q) => sum + q.votes, 0)
   const max = Math.max(1, ...poll.data.quests.map((q) => q.votes))
   const remaining = timeLeft(poll.data.expiresAtUtc)
+
+  const activeRecurring = poll.data.closeCronExpression ? parseCron(poll.data.closeCronExpression) : null
+  const activeRecurringLabel =
+    activeRecurring && activeRecurring.frequency === 'weekly'
+      ? `Fecha toda ${activeRecurring.days.map((d) => WEEKDAY_OPTIONS.find((w) => w.value === d)?.label).join(', ')} às ${activeRecurring.time}`
+      : null
 
   const copy = async () => {
     await navigator.clipboard.writeText(link)
@@ -54,6 +66,37 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
     }
   }
 
+  const saveRecurring = async () => {
+    if (recurDays.length === 0) {
+      setError('Escolha pelo menos um dia da semana.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const cron = buildCron({ frequency: 'weekly', days: recurDays, dayOfMonth: 1, time: recurTime })
+      await api.setPollRecurringClose(clanRegId, cron, POLL_TIMEZONE)
+      poll.reload()
+    } catch (e: unknown) {
+      setError(e instanceof ApiError ? e.message : 'Erro inesperado.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const clearRecurring = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await api.clearPollRecurringClose(clanRegId)
+      poll.reload()
+    } catch (e: unknown) {
+      setError(e instanceof ApiError ? e.message : 'Erro inesperado.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div>
       <div className="card mb-7 px-7 py-[26px]">
@@ -78,30 +121,98 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
         <div className="mb-1 font-serif text-lg font-semibold text-ink">Prazo da votação</div>
         <div className="mb-4 font-sans text-[13px] text-muted">
           {poll.data.isClosed ? (
-            <span className="font-bold text-danger">Votação encerrada — ninguém consegue votar até você abrir um novo prazo.</span>
+            <span className="font-bold text-danger">Votação encerrada — ninguém consegue votar até o prazo ser renovado.</span>
           ) : (
             <>
               Encerra em <span className="font-bold text-lav">{fmtDateTime(poll.data.expiresAtUtc)}</span>
               {remaining && <> · faltam {remaining}</>}
             </>
           )}
+          {activeRecurringLabel && (
+            <div className="mt-1 font-sans text-[12px] text-faint">
+              {activeRecurringLabel} · reabre sozinha a cada rodada decidida
+            </div>
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <select
-            value={duration}
-            onChange={(e) => setDuration(e.target.value as PollDuration)}
-            className="input-dark w-auto cursor-pointer"
+
+        <div className="mb-4 flex gap-2">
+          <button
+            onClick={() => setMode('manual')}
+            className={`flex-1 rounded-lg px-3 py-2 font-sans text-[12.5px] font-semibold ${
+              mode === 'manual' ? 'border border-[rgba(139,92,246,0.4)] bg-violet/15 text-ink' : 'border border-[rgba(180,150,220,0.22)] text-muted hover:text-lav'
+            }`}
           >
-            {(Object.keys(POLL_DURATION_LABELS) as PollDuration[]).map((d) => (
-              <option key={d} value={d}>
-                {POLL_DURATION_LABELS[d]}
-              </option>
-            ))}
-          </select>
-          <button onClick={extend} disabled={busy} className="btn-secondary flex-none">
-            {busy ? '…' : poll.data.isClosed ? 'Reabrir votação' : 'Adiar prazo'}
+            Prazo fixo
+          </button>
+          <button
+            onClick={() => setMode('recurring')}
+            className={`flex-1 rounded-lg px-3 py-2 font-sans text-[12.5px] font-semibold ${
+              mode === 'recurring' ? 'border border-[rgba(139,92,246,0.4)] bg-violet/15 text-ink' : 'border border-[rgba(180,150,220,0.22)] text-muted hover:text-lav'
+            }`}
+          >
+            Se repete toda semana
           </button>
         </div>
+
+        {mode === 'manual' ? (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <select
+              value={duration}
+              onChange={(e) => setDuration(e.target.value as PollDuration)}
+              className="input-dark w-auto cursor-pointer"
+            >
+              {(Object.keys(POLL_DURATION_LABELS) as PollDuration[]).map((d) => (
+                <option key={d} value={d}>
+                  {POLL_DURATION_LABELS[d]}
+                </option>
+              ))}
+            </select>
+            <button onClick={extend} disabled={busy} className="btn-secondary flex-none">
+              {busy ? '…' : poll.data.isClosed ? 'Reabrir votação' : 'Adiar prazo'}
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div className="mb-2.5 flex flex-wrap gap-1.5">
+              {WEEKDAY_OPTIONS.map((d) => {
+                const on = recurDays.includes(d.value)
+                return (
+                  <button
+                    key={d.value}
+                    onClick={() => setRecurDays(on ? recurDays.filter((x) => x !== d.value) : [...recurDays, d.value])}
+                    className={`h-9 w-9 cursor-pointer rounded-full border font-sans text-[11.5px] font-bold ${
+                      on
+                        ? 'border-violet/50 bg-violet/15 text-ink'
+                        : 'border-[rgba(180,150,220,0.22)] bg-transparent text-muted hover:text-lav'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <input
+                type="time"
+                value={recurTime}
+                onChange={(e) => setRecurTime(e.target.value)}
+                className="input-dark w-auto"
+              />
+              <button onClick={saveRecurring} disabled={busy} className="btn-secondary flex-none">
+                {busy ? '…' : 'Salvar recorrência'}
+              </button>
+              {poll.data.closeCronExpression && (
+                <button onClick={clearRecurring} disabled={busy} className="btn-ghost flex-none">
+                  Voltar para prazo fixo
+                </button>
+              )}
+            </div>
+            <div className="mt-2 font-sans text-[11.5px] text-dim">
+              Toda vez que a automação decidir a rodada (missão iniciada ou embaralhado), o prazo pula
+              sozinho para a próxima ocorrência — não precisa mexer de novo.
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="mb-3.5 flex items-center justify-between">

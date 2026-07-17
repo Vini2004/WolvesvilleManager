@@ -42,5 +42,18 @@ public class ClanRegistration
     /// </summary>
     public DateTime? PollExpiresAtUtc { get; set; }
 
+    /// <summary>
+    /// Expressão cron opcional (5 campos) para o prazo se repetir sozinho — ex.:
+    /// "0 11 * * MON,THU" fecha toda segunda e quinta às 11h. Quando definida, cada vez que
+    /// a automação "mais votada do formulário" decide a rodada, <see cref="PollExpiresAtUtc"/>
+    /// é recalculado para a próxima ocorrência, reabrindo a votação sozinha. Nula = prazo manual
+    /// (fixado por duração na aba admin, não se repete).
+    /// </summary>
+    [MaxLength(100)]
+    public string? PollCloseCronExpression { get; set; }
+
+    [MaxLength(64)]
+    public string? PollCloseTimeZoneId { get; set; }
+
     public List<ScheduledTask> ScheduledTasks { get; set; } = new();
 }

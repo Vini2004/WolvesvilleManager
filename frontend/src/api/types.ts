@@ -139,6 +139,8 @@ export interface PollAdmin {
   expiresAtUtc: string | null
   isClosed: boolean
   history: PollHistoryEntry[]
+  closeCronExpression: string | null
+  closeTimeZoneId: string | null
 }
 
 /** Durações de prazo oferecidas na aba admin — mesmos valores do enum PollDuration do backend. */
