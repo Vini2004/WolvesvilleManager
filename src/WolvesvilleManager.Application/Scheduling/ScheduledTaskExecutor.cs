@@ -368,6 +368,11 @@ public class ScheduledTaskExecutor
             return (TaskExecutionOutcome.Skipped, "Não há missão ativa — nada a pular.", null);
         if (!active.CanSkipWaitingTime)
         {
+            if (!task.AutoRetryOnXpNotReached)
+                return (TaskExecutionOutcome.Skipped,
+                    "O XP do tier ainda não bateu o objetivo — nada a pular agora. Retentativa automática " +
+                    "está desligada nesta automação.", null);
+
             // Conta as retentativas de HOJE (+1 desta, que ainda não foi gravada) para decidir se
             // ainda vale reagendar em 30 min ou se já é hora de desistir até a próxima ocorrência
             // normal do cron (ex.: a mesma automação, semana que vem).
