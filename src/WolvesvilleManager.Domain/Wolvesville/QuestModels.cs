@@ -46,15 +46,26 @@ public class ActiveQuest
     /// <summary>Tier atual, começando em 0 na API.</summary>
     public int Tier { get; set; }
 
-    /// <summary>XP acumulado no tier atual.</summary>
+    /// <summary>
+    /// XP acumulado desde o INÍCIO DA MISSÃO (soma de todos os tiers já concluídos + o progresso
+    /// do tier atual) — não reseta a cada tier. Para o progresso só do tier atual, use <see cref="TierXp"/>.
+    /// </summary>
     public long Xp { get; set; }
 
     public string? TierStartTime { get; set; }
     public string? TierEndTime { get; set; }
     public bool TierFinished { get; set; }
 
-    /// <summary>XP necessário para completar cada tier/recompensa.</summary>
+    /// <summary>XP necessário para completar cada tier/recompensa (mesmo valor em todos os tiers da missão).</summary>
     public long XpPerReward { get; set; }
+
+    /// <summary>
+    /// XP acumulado só no tier ATUAL, descontando os tiers já concluídos (<see cref="Tier"/> ×
+    /// <see cref="XpPerReward"/>). A API só devolve o total corrido desde o tier 0 em <see cref="Xp"/>;
+    /// sem esse desconto, a partir do 2º tier o progresso e o "objetivo concluído" aparecem errados
+    /// (ex.: 15801/6750 vira 100% quando o tier em si só tem 2301/6750 de verdade).
+    /// </summary>
+    public long TierXp => XpPerReward > 0 ? Math.Max(0, Xp - (long)Tier * XpPerReward) : Xp;
 
     /// <summary>true quando o tempo extra já foi resgatado.</summary>
     public bool ClaimedTime { get; set; }
@@ -71,13 +82,13 @@ public class ActiveQuest
     /// <summary>
     /// true quando existe um tempo de espera que o líder/co-líder pode pular gastando ouro do clã.
     /// Isso acontece quando o objetivo de XP do tier já foi atingido (<see cref="TierFinished"/> ou
-    /// XP acumulado ≥ <see cref="XpPerReward"/>) e agora só falta o cronômetro (TierEndTime) zerar
-    /// para liberar o próximo tier — ou quando o tier ainda nem começou (<see cref="IsBeforeTierStart"/>).
+    /// <see cref="TierXp"/> ≥ <see cref="XpPerReward"/>) e agora só falta o cronômetro (TierEndTime)
+    /// zerar para liberar o próximo tier — ou quando o tier ainda nem começou (<see cref="IsBeforeTierStart"/>).
     /// Enquanto o clã ainda está acumulando XP rumo ao objetivo NÃO há espera a pular.
     /// </summary>
     [JsonIgnore]
     public bool CanSkipWaitingTime =>
-        TierFinished || (XpPerReward > 0 && Xp >= XpPerReward) || IsBeforeTierStart;
+        TierFinished || (XpPerReward > 0 && TierXp >= XpPerReward) || IsBeforeTierStart;
 }
 
 public class QuestParticipant

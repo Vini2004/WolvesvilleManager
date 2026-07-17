@@ -29,12 +29,15 @@ export function Dashboard({ clanRegId }: { clanRegId: number }) {
 
   const data = overview.data!
   const active = data.active
-  const pct = active && active.xpPerReward > 0 ? Math.min(1, active.xp / active.xpPerReward) : 0
+  // active.xp é o total acumulado desde o início da missão (todos os tiers); active.tierXp já
+  // desconta os tiers anteriores — usar active.xp aqui faria o progresso "estourar" 100% a
+  // partir do 2º tier (ex.: 15801/6750 vira 100% quando o tier em si só tem 2301/6750 de verdade).
+  const pct = active && active.xpPerReward > 0 ? Math.min(1, active.tierXp / active.xpPerReward) : 0
   const remaining = active ? timeLeft(active.tierEndTime) : null
   // Tier ainda não começou a contar XP (janela de espera antes do início).
   const inWaiting = active?.tierStartTime ? new Date(active.tierStartTime) > new Date() : false
   // Objetivo de XP do tier já batido — falta só o cronômetro zerar para liberar o próximo.
-  const goalReached = !!active && (active.tierFinished || (active.xpPerReward > 0 && active.xp >= active.xpPerReward))
+  const goalReached = !!active && (active.tierFinished || (active.xpPerReward > 0 && active.tierXp >= active.xpPerReward))
   // É o líder/co-líder pode pular a espera (gastando ouro) nessas duas situações.
   const canSkipWait = inWaiting || goalReached
 
@@ -97,7 +100,7 @@ export function Dashboard({ clanRegId }: { clanRegId: number }) {
           <div className="mt-[22px]">
             <div className="mb-2 flex justify-between font-mono text-[12.5px] text-muted">
               <span>
-                {fmtNumber(active.xp)} / {fmtNumber(active.xpPerReward)} XP
+                {fmtNumber(active.tierXp)} / {fmtNumber(active.xpPerReward)} XP
               </span>
               <span>{Math.round(pct * 100)}%</span>
             </div>
