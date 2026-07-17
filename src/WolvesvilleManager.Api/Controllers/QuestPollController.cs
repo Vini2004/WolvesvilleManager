@@ -42,4 +42,9 @@ public class QuestPollController : ControllerBase
         await _service.VoteAsync(token, request.QuestId, request.VoterId, ct);
         return NoContent();
     }
+
+    /// <summary>Página pública: embaralha as missões disponíveis (gasta ouro do clã) e zera a urna.</summary>
+    [HttpPost("api/poll/{token}/shuffle")]
+    public async Task<PollDto> Shuffle(string token, CancellationToken ct) =>
+        await _service.ShuffleAsync(token, ct);
 }

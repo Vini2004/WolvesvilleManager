@@ -101,6 +101,24 @@ public class QuestPollService
         await _db.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Página pública: embaralha as missões disponíveis (gasta ouro do clã, igual à aba admin)
+    /// e zera a urna — os votos antigos eram para as missões que acabaram de sair de cartaz.
+    /// </summary>
+    public async Task<PollDto> ShuffleAsync(string token, CancellationToken ct = default)
+    {
+        var reg = await ResolveByTokenAsync(token, ct);
+        var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
+
+        await _api.ShuffleQuestsAsync(apiKey, reg.ClanId, ct);
+        await _db.QuestPollVotes
+            .Where(v => v.ClanRegistrationId == reg.Id)
+            .ExecuteDeleteAsync(ct);
+
+        var quests = await BuildQuestsAsync(reg.Id, apiKey, reg.ClanId, ct);
+        return new PollDto(reg.ClanName, reg.ClanTag, quests, null);
+    }
+
     private async Task<ClanRegistration> ResolveByTokenAsync(string token, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token) || token.Length > 64)

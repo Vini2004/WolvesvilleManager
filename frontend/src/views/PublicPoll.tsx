@@ -23,6 +23,7 @@ export function PublicPoll({ token }: { token: string }) {
   const voterId = getVoterId()
   const poll = useAsync(() => api.getPublicPoll(token, voterId), [token])
   const [busy, setBusy] = useState<string | null>(null)
+  const [shuffling, setShuffling] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const vote = async (questId: string) => {
@@ -35,6 +36,25 @@ export function PublicPoll({ token }: { token: string }) {
       setError(e instanceof ApiError ? e.message : 'Erro inesperado.')
     } finally {
       setBusy(null)
+    }
+  }
+
+  const shuffle = async () => {
+    if (
+      !window.confirm(
+        'Embaralhar traz missões novas para todo o clã (custa ouro do clã) e zera os votos atuais. Continuar?',
+      )
+    )
+      return
+    setShuffling(true)
+    setError(null)
+    try {
+      await api.shufflePoll(token)
+      poll.reload()
+    } catch (e: unknown) {
+      setError(e instanceof ApiError ? e.message : 'Erro inesperado.')
+    } finally {
+      setShuffling(false)
     }
   }
 
@@ -53,6 +73,13 @@ export function PublicPoll({ token }: { token: string }) {
               <div className="mt-1 font-sans text-[13px] text-muted">
                 Vote na próxima missão do clã · seu voto pode ser trocado até a apuração
               </div>
+              <button
+                onClick={shuffle}
+                disabled={shuffling || busy !== null}
+                className="btn-ghost mt-4"
+              >
+                {shuffling ? 'Embaralhando…' : '🔀 Embaralhar missões (custa ouro)'}
+              </button>
             </div>
 
             {error && (
@@ -95,7 +122,7 @@ export function PublicPoll({ token }: { token: string }) {
                         </div>
                         <button
                           onClick={() => vote(q.questId)}
-                          disabled={busy !== null || isVoted}
+                          disabled={busy !== null || shuffling || isVoted}
                           className={isVoted ? 'btn-secondary flex-none' : 'btn-primary flex-none'}
                         >
                           {isVoted ? '✓ Seu voto' : busy === q.questId ? 'Votando…' : 'Votar nesta'}

@@ -211,6 +211,7 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ questId, voterId }),
     }),
+  shufflePoll: (token: string) => request<PollInfo>(`/api/poll/${token}/shuffle`, { method: 'POST' }),
 }
 
 export type { AvailableQuest }
