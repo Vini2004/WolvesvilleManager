@@ -5,6 +5,7 @@ import { Brand, ErrorBoundary, MoonLogo, Particles, ThemeMenu } from './componen
 import { useTheme } from './lib/theme'
 import { Login } from './views/Login'
 import { Dashboard } from './views/Dashboard'
+import { Guide } from './views/Guide'
 import { Quests } from './views/Quests'
 import { Members } from './views/Members'
 import { Automations } from './views/Automations'
@@ -18,6 +19,7 @@ import { RegisterClan } from './views/RegisterClan'
 
 type View =
   | 'dashboard'
+  | 'guide'
   | 'quests'
   | 'members'
   | 'announcements'
@@ -30,6 +32,7 @@ type View =
 
 const TITLES: Record<View, [string, string]> = {
   dashboard: ['Visão geral', 'Ouro, gemas e a missão ativa do clã'],
+  guide: ['Guia de uso', 'Como funciona cada tela do painel'],
   quests: ['Missões', 'Disponíveis, votos e histórico de conclusões'],
   members: ['Membros', 'Participação em missões, kick e bloqueios'],
   announcements: ['Anúncios', 'Publique avisos para todo o clã'],
@@ -48,6 +51,12 @@ const NAV_ICONS: Record<View, React.ReactNode> = {
       <rect x="13" y="3" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
       <rect x="3" y="13" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
       <rect x="13" y="13" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  ),
+  guide: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 17v.01M12 14c0-2.2 2.2-2.2 2.2-4.4a2.2 2.2 0 1 0-4.4 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
   quests: (
@@ -189,7 +198,7 @@ function AuthenticatedApp() {
 
   const selectedClan = clans.find((c) => c.id === selectedId) ?? null
   const [title, subtitle] = TITLES[view]
-  const needsClan = view !== 'register'
+  const needsClan = view !== 'register' && view !== 'guide'
 
   return (
     <div className="relative flex min-h-screen overflow-hidden bg-night">
@@ -305,6 +314,7 @@ function AuthenticatedApp() {
             ) : (
               <ErrorBoundary>
                 {view === 'dashboard' && selectedClan && <Dashboard clanRegId={selectedClan.id} />}
+                {view === 'guide' && <Guide />}
                 {view === 'quests' && selectedClan && <Quests clanRegId={selectedClan.id} />}
                 {view === 'members' && selectedClan && <Members clanRegId={selectedClan.id} />}
                 {view === 'announcements' && selectedClan && <Announcements clanRegId={selectedClan.id} />}

@@ -35,5 +35,12 @@ public class ClanRegistration
     [MaxLength(64)]
     public string? PollToken { get; set; }
 
+    /// <summary>
+    /// Prazo da votação: depois disso o formulário público para de aceitar votos
+    /// novos (mas continua visível). Sempre definido junto com <see cref="PollToken"/> —
+    /// a votação nunca fica aberta indefinidamente.
+    /// </summary>
+    public DateTime? PollExpiresAtUtc { get; set; }
+
     public List<ScheduledTask> ScheduledTasks { get; set; } = new();
 }

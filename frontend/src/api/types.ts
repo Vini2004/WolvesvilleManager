@@ -113,19 +113,34 @@ export interface PollQuest {
   votes: number
 }
 
-/** Página pública: candidatas + o voto deste navegador. */
+/** Página pública: candidatas + o voto deste navegador + o prazo. */
 export interface PollInfo {
   clanName: string
   clanTag: string | null
   quests: PollQuest[]
   votedQuestId: string | null
+  expiresAtUtc: string | null
+  isClosed: boolean
 }
 
-/** Aba admin: link e apuração. */
+/** Aba admin: link, apuração e prazo. */
 export interface PollAdmin {
   token: string
   quests: PollQuest[]
   totalVotes: number
+  expiresAtUtc: string | null
+  isClosed: boolean
+}
+
+/** Durações de prazo oferecidas na aba admin — mesmos valores do enum PollDuration do backend. */
+export type PollDuration = 'SixHours' | 'TwelveHours' | 'OneDay' | 'ThreeDays' | 'SevenDays'
+
+export const POLL_DURATION_LABELS: Record<PollDuration, string> = {
+  SixHours: '6 horas',
+  TwelveHours: '12 horas',
+  OneDay: '1 dia',
+  ThreeDays: '3 dias',
+  SevenDays: '7 dias',
 }
 
 export interface ScheduledTask {

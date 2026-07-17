@@ -4,6 +4,7 @@ using WolvesvilleManager.Application.Polls;
 namespace WolvesvilleManager.Api.Controllers;
 
 public record VoteRequest(string QuestId, string VoterId);
+public record SetExpirationRequest(PollDuration Duration);
 
 /// <summary>
 /// Formulário público de votação de missões. As rotas /api/poll/* são as ÚNICAS
@@ -28,6 +29,14 @@ public class QuestPollController : ControllerBase
     {
         await _service.ResetAsync(id, ct);
         return NoContent();
+    }
+
+    /// <summary>Aba admin: define/estende o prazo da votação a partir de agora.</summary>
+    [HttpPost("api/clans/{id:int}/poll/expiration")]
+    public async Task<object> SetExpiration(int id, [FromBody] SetExpirationRequest request, CancellationToken ct)
+    {
+        var expiresAtUtc = await _service.SetExpirationAsync(id, request.Duration, ct);
+        return new { expiresAtUtc };
     }
 
     /// <summary>Página pública: candidatas + voto atual deste navegador (via ?voterId=).</summary>

@@ -14,6 +14,7 @@ import type {
   CreateScheduledTaskRequest,
   LedgerEntry,
   PollAdmin,
+  PollDuration,
   PollInfo,
   QuestHistoryEntry,
   QuestsOverview,
@@ -203,6 +204,11 @@ export const api = {
   getPollAdmin: (clanId: number) => request<PollAdmin>(`/api/clans/${clanId}/poll`),
   resetPoll: (clanId: number) =>
     request<void>(`/api/clans/${clanId}/poll/reset`, { method: 'POST' }),
+  setPollExpiration: (clanId: number, duration: PollDuration) =>
+    request<{ expiresAtUtc: string }>(`/api/clans/${clanId}/poll/expiration`, {
+      method: 'POST',
+      body: JSON.stringify({ duration }),
+    }),
   // Rotas públicas: o backend não exige X-Api-Key em /api/poll/* (o token do link é a credencial).
   getPublicPoll: (token: string, voterId: string) =>
     request<PollInfo>(`/api/poll/${token}?voterId=${encodeURIComponent(voterId)}`),

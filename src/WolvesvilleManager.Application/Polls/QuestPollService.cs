@@ -9,11 +9,16 @@ namespace WolvesvilleManager.Application.Polls;
 /// <summary>Missão candidata no formulário, com a contagem atual de votos.</summary>
 public record PollQuestDto(string QuestId, string Name, string? ImageUrl, bool Gems, int Votes);
 
-/// <summary>O que a página pública vê: nome do clã, candidatas e o voto deste navegador.</summary>
-public record PollDto(string ClanName, string? ClanTag, List<PollQuestDto> Quests, string? VotedQuestId);
+/// <summary>O que a página pública vê: nome do clã, candidatas, o voto deste navegador e o prazo.</summary>
+public record PollDto(
+    string ClanName, string? ClanTag, List<PollQuestDto> Quests, string? VotedQuestId,
+    DateTime? ExpiresAtUtc, bool IsClosed);
 
-/// <summary>O que a aba admin vê: o link e a apuração.</summary>
-public record PollAdminDto(string Token, List<PollQuestDto> Quests, int TotalVotes);
+/// <summary>O que a aba admin vê: o link, a apuração e o prazo.</summary>
+public record PollAdminDto(string Token, List<PollQuestDto> Quests, int TotalVotes, DateTime? ExpiresAtUtc, bool IsClosed);
+
+/// <summary>Durações de prazo que a aba admin oferece — nunca "para sempre".</summary>
+public enum PollDuration { SixHours, TwelveHours, OneDay, ThreeDays, SevenDays }
 
 /// <summary>
 /// Formulário público de votação de missões. O token do link é a única credencial da
@@ -32,7 +37,7 @@ public class QuestPollService
         _protector = protector;
     }
 
-    /// <summary>Aba admin: garante que o clã tem um token (gera no primeiro acesso) e apura os votos.</summary>
+    /// <summary>Aba admin: garante que o clã tem um token (gera no primeiro acesso, com prazo padrão de 7 dias) e apura os votos.</summary>
     public async Task<PollAdminDto> GetAdminAsync(int clanRegistrationId, CancellationToken ct = default)
     {
         var reg = await _db.ClanRegistrations.FirstOrDefaultAsync(c => c.Id == clanRegistrationId, ct)
@@ -41,13 +46,14 @@ public class QuestPollService
         if (string.IsNullOrEmpty(reg.PollToken))
         {
             reg.PollToken = RandomNumberGenerator.GetHexString(32, lowercase: true);
+            reg.PollExpiresAtUtc = DateTime.UtcNow.AddDays(7);
             await _db.SaveChangesAsync(ct);
         }
 
         var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
         var quests = await BuildQuestsAsync(reg.Id, apiKey, reg.ClanId, ct);
         var total = await _db.QuestPollVotes.CountAsync(v => v.ClanRegistrationId == reg.Id, ct);
-        return new PollAdminDto(reg.PollToken, quests, total);
+        return new PollAdminDto(reg.PollToken, quests, total, reg.PollExpiresAtUtc, IsClosed(reg));
     }
 
     /// <summary>Aba admin: zera a urna do clã.</summary>
@@ -56,6 +62,29 @@ public class QuestPollService
         await _db.QuestPollVotes
             .Where(v => v.ClanRegistrationId == clanRegistrationId)
             .ExecuteDeleteAsync(ct);
+    }
+
+    /// <summary>
+    /// Aba admin: define/estende o prazo a partir de agora. A votação nunca fica aberta para
+    /// sempre — não existe opção de prazo indefinido, só durações fixas.
+    /// </summary>
+    public async Task<DateTime> SetExpirationAsync(int clanRegistrationId, PollDuration duration, CancellationToken ct = default)
+    {
+        var reg = await _db.ClanRegistrations.FirstOrDefaultAsync(c => c.Id == clanRegistrationId, ct)
+            ?? throw new NotFoundException($"Clã registrado #{clanRegistrationId} não encontrado.");
+
+        var hours = duration switch
+        {
+            PollDuration.SixHours => 6,
+            PollDuration.TwelveHours => 12,
+            PollDuration.OneDay => 24,
+            PollDuration.ThreeDays => 72,
+            PollDuration.SevenDays => 168,
+            _ => throw new BusinessRuleException("Duração inválida."),
+        };
+        reg.PollExpiresAtUtc = DateTime.UtcNow.AddHours(hours);
+        await _db.SaveChangesAsync(ct);
+        return reg.PollExpiresAtUtc.Value;
     }
 
     /// <summary>Página pública: candidatas + o voto já registrado por este navegador.</summary>
@@ -72,7 +101,7 @@ public class QuestPollService
                 .Select(v => v.QuestId)
                 .FirstOrDefaultAsync(ct);
 
-        return new PollDto(reg.ClanName, reg.ClanTag, quests, voted);
+        return new PollDto(reg.ClanName, reg.ClanTag, quests, voted, reg.PollExpiresAtUtc, IsClosed(reg));
     }
 
     /// <summary>Página pública: registra (ou troca) o voto deste navegador.</summary>
@@ -84,6 +113,8 @@ public class QuestPollService
             throw new BusinessRuleException("Escolha uma missão para votar.");
 
         var reg = await ResolveByTokenAsync(token, ct);
+        if (IsClosed(reg))
+            throw new BusinessRuleException("A votação encerrou. Peça para o administrador do clã abrir um novo prazo.");
 
         // "Embaralhar" é sempre uma opção válida; missão de verdade precisa estar disponível agora
         // (a lista rotaciona).
@@ -104,6 +135,9 @@ public class QuestPollService
 
         await _db.SaveChangesAsync(ct);
     }
+
+    private static bool IsClosed(ClanRegistration reg) =>
+        reg.PollExpiresAtUtc is { } expires && DateTime.UtcNow >= expires;
 
     private async Task<ClanRegistration> ResolveByTokenAsync(string token, CancellationToken ct)
     {

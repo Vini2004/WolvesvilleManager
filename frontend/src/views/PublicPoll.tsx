@@ -3,6 +3,7 @@ import { api, ApiError } from '../api/client'
 import { SHUFFLE_OPTION_ID } from '../api/types'
 import { ErrorBox, Loading, Particles } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
+import { fmtDateTime, timeLeft } from '../lib/format'
 
 const VOTER_STORAGE = 'wvm.voterId'
 
@@ -51,9 +52,21 @@ export function PublicPoll({ token }: { token: string }) {
           <>
             <div className="mb-8 text-center">
               <div className="font-serif text-2xl font-semibold text-ink">{poll.data.clanName}</div>
-              <div className="mt-1 font-sans text-[13px] text-muted">
-                Vote na próxima missão do clã · seu voto pode ser trocado até a apuração
-              </div>
+              {poll.data.isClosed ? (
+                <div className="mt-1 font-sans text-[13px] font-bold text-danger">
+                  Votação encerrada — aguarde o clã abrir um novo prazo.
+                </div>
+              ) : (
+                <div className="mt-1 font-sans text-[13px] text-muted">
+                  Vote na próxima missão do clã · seu voto pode ser trocado até a apuração
+                  {timeLeft(poll.data.expiresAtUtc) && (
+                    <>
+                      {' '}
+                      · encerra em {fmtDateTime(poll.data.expiresAtUtc)} ({timeLeft(poll.data.expiresAtUtc)})
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             {error && (
@@ -98,7 +111,7 @@ export function PublicPoll({ token }: { token: string }) {
                         </div>
                         <button
                           onClick={() => vote(q.questId)}
-                          disabled={busy !== null || isVoted}
+                          disabled={busy !== null || isVoted || poll.data!.isClosed}
                           className={isVoted ? 'btn-secondary flex-none' : 'btn-primary flex-none'}
                         >
                           {isVoted ? '✓ Seu voto' : busy === q.questId ? 'Votando…' : 'Votar nesta'}

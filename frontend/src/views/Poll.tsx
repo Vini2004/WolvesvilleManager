@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { api, ApiError } from '../api/client'
-import { SHUFFLE_OPTION_ID } from '../api/types'
+import { POLL_DURATION_LABELS, SHUFFLE_OPTION_ID, type PollDuration } from '../api/types'
 import { ErrorBox, Loading, SectionTitle } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
+import { fmtDateTime, timeLeft } from '../lib/format'
 
 /** Aba admin: link compartilhável do formulário público + apuração em tempo real. */
 export function Poll({ clanRegId }: { clanRegId: number }) {
   const poll = useAsync(() => api.getPollAdmin(clanRegId), [clanRegId])
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [duration, setDuration] = useState<PollDuration>('OneDay')
   const [error, setError] = useState<string | null>(null)
 
   if (poll.loading) return <Loading />
@@ -17,6 +19,7 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
   const link = `${window.location.origin}/votar/${poll.data.token}`
   const totalShown = poll.data.quests.reduce((sum, q) => sum + q.votes, 0)
   const max = Math.max(1, ...poll.data.quests.map((q) => q.votes))
+  const remaining = timeLeft(poll.data.expiresAtUtc)
 
   const copy = async () => {
     await navigator.clipboard.writeText(link)
@@ -30,6 +33,19 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
     setError(null)
     try {
       await api.resetPoll(clanRegId)
+      poll.reload()
+    } catch (e: unknown) {
+      setError(e instanceof ApiError ? e.message : 'Erro inesperado.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const extend = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await api.setPollExpiration(clanRegId, duration)
       poll.reload()
     } catch (e: unknown) {
       setError(e instanceof ApiError ? e.message : 'Erro inesperado.')
@@ -54,6 +70,36 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
           <input readOnly value={link} onFocus={(e) => e.target.select()} className="input-dark flex-1 basis-64" />
           <button onClick={copy} className="btn-primary flex-none">
             {copied ? 'Copiado!' : 'Copiar link'}
+          </button>
+        </div>
+      </div>
+
+      <div className="card mb-7 px-7 py-[26px]">
+        <div className="mb-1 font-serif text-lg font-semibold text-ink">Prazo da votação</div>
+        <div className="mb-4 font-sans text-[13px] text-muted">
+          {poll.data.isClosed ? (
+            <span className="font-bold text-danger">Votação encerrada — ninguém consegue votar até você abrir um novo prazo.</span>
+          ) : (
+            <>
+              Encerra em <span className="font-bold text-lav">{fmtDateTime(poll.data.expiresAtUtc)}</span>
+              {remaining && <> · faltam {remaining}</>}
+            </>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <select
+            value={duration}
+            onChange={(e) => setDuration(e.target.value as PollDuration)}
+            className="input-dark w-auto cursor-pointer"
+          >
+            {(Object.keys(POLL_DURATION_LABELS) as PollDuration[]).map((d) => (
+              <option key={d} value={d}>
+                {POLL_DURATION_LABELS[d]}
+              </option>
+            ))}
+          </select>
+          <button onClick={extend} disabled={busy} className="btn-secondary flex-none">
+            {busy ? '…' : poll.data.isClosed ? 'Reabrir votação' : 'Adiar prazo'}
           </button>
         </div>
       </div>
