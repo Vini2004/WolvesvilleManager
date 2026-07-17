@@ -1,12 +1,23 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
-import { POLL_DURATION_LABELS, SHUFFLE_OPTION_ID, type PollDuration } from '../api/types'
+import { POLL_DURATION_LABELS, SHUFFLE_OPTION_ID, type PollDuration, type Weekday } from '../api/types'
 import { ErrorBox, Loading, SectionTitle } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 import { fmtDateTime, timeLeft } from '../lib/format'
-import { buildCron, parseCron, WEEKDAY_OPTIONS } from '../lib/cron'
+import { WEEKDAY_OPTIONS } from '../lib/cron'
 
 const POLL_TIMEZONE = 'America/Sao_Paulo'
+
+interface EditableWindow {
+  startDay: Weekday
+  startTime: string
+  endDay: Weekday
+  endTime: string
+}
+
+const emptyWindow = (): EditableWindow => ({ startDay: 'SUN', startTime: '23:00', endDay: 'MON', endTime: '11:00' })
+
+const weekdayLabel = (d: string) => WEEKDAY_OPTIONS.find((w) => w.value === d)?.label ?? d
 
 /** Aba admin: link compartilhável do formulário público + apuração em tempo real. */
 export function Poll({ clanRegId }: { clanRegId: number }) {
@@ -14,30 +25,25 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
   const [copied, setCopied] = useState(false)
   const [busy, setBusy] = useState(false)
   const [duration, setDuration] = useState<PollDuration>('OneDay')
-  const [mode, setMode] = useState<'manual' | 'recurring'>('manual')
-  const [recurDays, setRecurDays] = useState<string[]>([])
-  const [recurTime, setRecurTime] = useState('11:00')
+  const [mode, setMode] = useState<'manual' | 'windows'>('manual')
+  const [windows, setWindows] = useState<EditableWindow[]>([])
   const [error, setError] = useState<string | null>(null)
 
-  // Sincroniza a aba/campos com o que está SALVO de verdade sempre que o cron recorrente muda
-  // (carregou a página, ou uma ação acabou de gravar) — sem isso, abrir a aba "Se repete" mostrava
-  // valores padrão em vez do que já estava configurado, e um clique em "Salvar" sobrescrevia um
-  // prazo fixo que o admin tinha acabado de definir.
-  const closeCron = poll.data?.closeCronExpression ?? null
+  // Sincroniza a aba/campos com o que está SALVO de verdade sempre que os ciclos mudam (carregou
+  // a página, ou uma ação acabou de gravar) — sem isso, abrir a aba "Ciclos" mostrava valores
+  // padrão em vez do que já estava configurado, e um clique em "Salvar" sobrescrevia um prazo
+  // fixo que o admin tinha acabado de definir.
+  const savedWindowsKey = poll.data ? JSON.stringify(poll.data.windows) : null
   useEffect(() => {
-    if (closeCron) {
-      const parsed = parseCron(closeCron)
-      if (parsed && parsed.frequency === 'weekly') {
-        setMode('recurring')
-        setRecurDays(parsed.days)
-        setRecurTime(parsed.time)
-        return
-      }
+    if (poll.data && poll.data.windows.length > 0) {
+      setMode('windows')
+      setWindows(poll.data.windows.map((w) => ({ startDay: w.startDay, startTime: w.startTime, endDay: w.endDay, endTime: w.endTime })))
+      return
     }
     setMode('manual')
-    setRecurDays([])
+    setWindows([])
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [closeCron])
+  }, [savedWindowsKey])
 
   if (poll.loading) return <Loading />
   if (poll.error || !poll.data) return <ErrorBox message={poll.error ?? 'Erro.'} onRetry={poll.reload} />
@@ -45,13 +51,13 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
   const link = `${window.location.origin}/votar/${poll.data.token}`
   const totalShown = poll.data.quests.reduce((sum, q) => sum + q.votes, 0)
   const max = Math.max(1, ...poll.data.quests.map((q) => q.votes))
-  const remaining = timeLeft(poll.data.expiresAtUtc)
+  const remaining = timeLeft(poll.data.nextBoundaryUtc)
 
-  const activeRecurring = poll.data.closeCronExpression ? parseCron(poll.data.closeCronExpression) : null
-  const activeRecurringLabel =
-    activeRecurring && activeRecurring.frequency === 'weekly'
-      ? `Fecha toda ${activeRecurring.days.map((d) => WEEKDAY_OPTIONS.find((w) => w.value === d)?.label).join(', ')} às ${activeRecurring.time}`
-      : null
+  const windowsSummary = poll.data.windows.length
+    ? poll.data.windows
+        .map((w) => `${weekdayLabel(w.startDay)} ${w.startTime} → ${weekdayLabel(w.endDay)} ${w.endTime}`)
+        .join(' · ')
+    : null
 
   const copy = async () => {
     await navigator.clipboard.writeText(link)
@@ -75,8 +81,8 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
 
   const extend = async () => {
     if (
-      poll.data!.closeCronExpression &&
-      !window.confirm('Isso desliga o prazo recorrente atual e passa a usar um prazo fixo. Continuar?')
+      poll.data!.windows.length > 0 &&
+      !window.confirm('Isso desliga os ciclos configurados e passa a usar um prazo fixo. Continuar?')
     )
       return
     setBusy(true)
@@ -91,16 +97,20 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
     }
   }
 
-  const saveRecurring = async () => {
-    if (recurDays.length === 0) {
-      setError('Escolha pelo menos um dia da semana.')
+  const addWindow = () => setWindows([...windows, emptyWindow()])
+  const removeWindow = (i: number) => setWindows(windows.filter((_, idx) => idx !== i))
+  const updateWindow = (i: number, patch: Partial<EditableWindow>) =>
+    setWindows(windows.map((w, idx) => (idx === i ? { ...w, ...patch } : w)))
+
+  const saveWindows = async () => {
+    if (windows.length === 0) {
+      setError('Adicione pelo menos um ciclo.')
       return
     }
     setBusy(true)
     setError(null)
     try {
-      const cron = buildCron({ frequency: 'weekly', days: recurDays, dayOfMonth: 1, time: recurTime })
-      await api.setPollRecurringClose(clanRegId, cron, POLL_TIMEZONE)
+      await api.setPollWindows(clanRegId, windows, POLL_TIMEZONE)
       poll.reload()
     } catch (e: unknown) {
       setError(e instanceof ApiError ? e.message : 'Erro inesperado.')
@@ -109,11 +119,11 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
     }
   }
 
-  const clearRecurring = async () => {
+  const clearWindows = async () => {
     setBusy(true)
     setError(null)
     try {
-      await api.clearPollRecurringClose(clanRegId)
+      await api.clearPollWindows(clanRegId)
       poll.reload()
     } catch (e: unknown) {
       setError(e instanceof ApiError ? e.message : 'Erro inesperado.')
@@ -157,18 +167,18 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
           </div>
           {poll.data.isClosed ? (
             <div className="mt-1 font-sans text-[16px] font-bold text-danger">
-              🔒 Votação encerrada — ninguém consegue votar até o prazo ser renovado.
+              🔒 Votação encerrada
+              {remaining && <span className="font-mono text-gold"> · reabre em {remaining}</span>}
+              {!poll.data.nextBoundaryUtc && ' — ninguém consegue votar até o prazo ser renovado.'}
             </div>
           ) : (
             <div className="mt-1 font-sans text-[16px] font-bold text-ink">
-              Encerra em {fmtDateTime(poll.data.expiresAtUtc)}
+              Encerra em {fmtDateTime(poll.data.nextBoundaryUtc)}
               {remaining && <span className="font-mono text-gold"> · faltam {remaining}</span>}
             </div>
           )}
-          {activeRecurringLabel && (
-            <div className="mt-1.5 font-sans text-[12.5px] text-lav">
-              🔁 {activeRecurringLabel} · reabre sozinha a cada rodada decidida
-            </div>
+          {windowsSummary && (
+            <div className="mt-1.5 font-sans text-[12.5px] text-lav">🔁 {windowsSummary}</div>
           )}
         </div>
 
@@ -182,12 +192,12 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
             Prazo fixo
           </button>
           <button
-            onClick={() => setMode('recurring')}
+            onClick={() => setMode('windows')}
             className={`flex-1 rounded-lg px-3 py-2 font-sans text-[12.5px] font-semibold ${
-              mode === 'recurring' ? 'border border-[rgba(139,92,246,0.4)] bg-violet/15 text-ink' : 'border border-[rgba(180,150,220,0.22)] text-muted hover:text-lav'
+              mode === 'windows' ? 'border border-[rgba(139,92,246,0.4)] bg-violet/15 text-ink' : 'border border-[rgba(180,150,220,0.22)] text-muted hover:text-lav'
             }`}
           >
-            Se repete toda semana
+            Ciclos semanais
           </button>
         </div>
 
@@ -210,43 +220,82 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
           </div>
         ) : (
           <div>
-            <div className="mb-2.5 flex flex-wrap gap-1.5">
-              {WEEKDAY_OPTIONS.map((d) => {
-                const on = recurDays.includes(d.value)
-                return (
-                  <button
-                    key={d.value}
-                    onClick={() => setRecurDays(on ? recurDays.filter((x) => x !== d.value) : [...recurDays, d.value])}
-                    className={`h-9 w-9 cursor-pointer rounded-full border font-sans text-[11.5px] font-bold ${
-                      on
-                        ? 'border-violet/50 bg-violet/15 text-ink'
-                        : 'border-[rgba(180,150,220,0.22)] bg-transparent text-muted hover:text-lav'
-                    }`}
-                  >
-                    {d.label}
-                  </button>
-                )
-              })}
+            <div className="flex flex-col gap-3">
+              {windows.length === 0 && (
+                <div className="font-sans text-[12.5px] text-muted">
+                  Nenhum ciclo ainda — adicione ao menos um.
+                </div>
+              )}
+              {windows.map((w, i) => (
+                <div key={i} className="rounded-lg border border-[rgba(180,150,220,0.22)] px-3.5 py-3">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div className="font-sans text-[11.5px] font-bold uppercase tracking-[0.06em] text-faint">
+                      Ciclo {i + 1}
+                    </div>
+                    <button onClick={() => removeWindow(i)} className="btn-danger-ghost">
+                      Remover
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-sans text-[12px] text-muted">Início:</span>
+                    <select
+                      value={w.startDay}
+                      onChange={(e) => updateWindow(i, { startDay: e.target.value as Weekday })}
+                      className="input-dark w-auto cursor-pointer"
+                    >
+                      {WEEKDAY_OPTIONS.map((d) => (
+                        <option key={d.value} value={d.value}>
+                          {d.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="time"
+                      value={w.startTime}
+                      onChange={(e) => updateWindow(i, { startTime: e.target.value })}
+                      className="input-dark w-auto"
+                    />
+                    <span className="font-sans text-[12px] text-muted">até</span>
+                    <select
+                      value={w.endDay}
+                      onChange={(e) => updateWindow(i, { endDay: e.target.value as Weekday })}
+                      className="input-dark w-auto cursor-pointer"
+                    >
+                      {WEEKDAY_OPTIONS.map((d) => (
+                        <option key={d.value} value={d.value}>
+                          {d.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="time"
+                      value={w.endTime}
+                      onChange={(e) => updateWindow(i, { endTime: e.target.value })}
+                      className="input-dark w-auto"
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <input
-                type="time"
-                value={recurTime}
-                onChange={(e) => setRecurTime(e.target.value)}
-                className="input-dark w-auto"
-              />
-              <button onClick={saveRecurring} disabled={busy} className="btn-secondary flex-none">
-                {busy ? '…' : 'Salvar recorrência'}
+
+            <div className="mt-3 flex flex-wrap items-center gap-2.5">
+              <button onClick={addWindow} className="btn-ghost flex-none">
+                + Adicionar ciclo
               </button>
-              {poll.data.closeCronExpression && (
-                <button onClick={clearRecurring} disabled={busy} className="btn-ghost flex-none">
+              <button onClick={saveWindows} disabled={busy} className="btn-secondary flex-none">
+                {busy ? '…' : 'Salvar ciclos'}
+              </button>
+              {poll.data.windows.length > 0 && (
+                <button onClick={clearWindows} disabled={busy} className="btn-ghost flex-none">
                   Voltar para prazo fixo
                 </button>
               )}
             </div>
             <div className="mt-2 font-sans text-[11.5px] text-dim">
-              Toda vez que a automação decidir a rodada (missão iniciada ou embaralhado), o prazo pula
-              sozinho para a próxima ocorrência — não precisa mexer de novo.
+              A votação fica aberta em qualquer um dos ciclos acima — eles se repetem toda semana,
+              e você pode adicionar quantos quiser. Quando a automação "Iniciar mais votada do
+              formulário" rodar, ela apura só o último ciclo já encerrado (não a urna inteira),
+              então pode configurá-la para rodar logo depois de cada horário de fim.
             </div>
           </div>
         )}

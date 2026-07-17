@@ -14,6 +14,7 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<MemberXpSnapshot> MemberXpSnapshots => Set<MemberXpSnapshot>();
     public DbSet<QuestPollVote> QuestPollVotes => Set<QuestPollVote>();
     public DbSet<QuestPollResult> QuestPollResults => Set<QuestPollResult>();
+    public DbSet<PollWindow> PollWindows => Set<PollWindow>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -48,6 +49,15 @@ public class AppDbContext : DbContext, IAppDbContext
                 .WithOne(t => t.ClanRegistration)
                 .HasForeignKey(t => t.ClanRegistrationId)
                 .OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(c => c.PollWindows)
+                .WithOne(w => w.ClanRegistration)
+                .HasForeignKey(w => w.ClanRegistrationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PollWindow>(e =>
+        {
+            e.HasIndex(w => w.ClanRegistrationId);
         });
 
         modelBuilder.Entity<ScheduledTask>(e =>

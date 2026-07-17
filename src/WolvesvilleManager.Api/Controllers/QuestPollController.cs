@@ -5,7 +5,8 @@ namespace WolvesvilleManager.Api.Controllers;
 
 public record VoteRequest(string QuestId, string Nickname);
 public record SetExpirationRequest(PollDuration Duration);
-public record SetRecurringCloseRequest(string CronExpression, string TimeZoneId);
+public record PollWindowRequest(string StartDay, string StartTime, string EndDay, string EndTime);
+public record SetPollWindowsRequest(List<PollWindowRequest> Windows, string TimeZoneId);
 
 /// <summary>
 /// Formulário público de votação de missões. As rotas /api/poll/* são as ÚNICAS
@@ -40,19 +41,19 @@ public class QuestPollController : ControllerBase
         return new { expiresAtUtc };
     }
 
-    /// <summary>Aba admin: prazo recorrente (ex.: toda segunda e quinta às 11h) — reabre sozinho a cada rodada decidida.</summary>
-    [HttpPost("api/clans/{id:int}/poll/recurring-close")]
-    public async Task<object> SetRecurringClose(int id, [FromBody] SetRecurringCloseRequest request, CancellationToken ct)
-    {
-        var expiresAtUtc = await _service.SetRecurringCloseAsync(id, request.CronExpression, request.TimeZoneId, ct);
-        return new { expiresAtUtc };
-    }
+    /// <summary>Aba admin: substitui as janelas semanais recorrentes de votação (quantas o admin quiser).</summary>
+    [HttpPost("api/clans/{id:int}/poll/windows")]
+    public async Task<List<PollWindowDto>> SetWindows(int id, [FromBody] SetPollWindowsRequest request, CancellationToken ct) =>
+        await _service.SetWindowsAsync(
+            id,
+            request.Windows.Select(w => new PollWindowInput(w.StartDay, w.StartTime, w.EndDay, w.EndTime)).ToList(),
+            request.TimeZoneId, ct);
 
-    /// <summary>Aba admin: volta o prazo recorrente para manual.</summary>
-    [HttpDelete("api/clans/{id:int}/poll/recurring-close")]
-    public async Task<IActionResult> ClearRecurringClose(int id, CancellationToken ct)
+    /// <summary>Aba admin: remove as janelas configuradas, voltando ao prazo manual.</summary>
+    [HttpDelete("api/clans/{id:int}/poll/windows")]
+    public async Task<IActionResult> ClearWindows(int id, CancellationToken ct)
     {
-        await _service.ClearRecurringCloseAsync(id, ct);
+        await _service.ClearWindowsAsync(id, ct);
         return NoContent();
     }
 

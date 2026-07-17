@@ -16,6 +16,7 @@ import type {
   PollAdmin,
   PollDuration,
   PollInfo,
+  PollWindow,
   QuestHistoryEntry,
   QuestsOverview,
   RegisteredClan,
@@ -209,13 +210,17 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ duration }),
     }),
-  setPollRecurringClose: (clanId: number, cronExpression: string, timeZoneId: string) =>
-    request<{ expiresAtUtc: string }>(`/api/clans/${clanId}/poll/recurring-close`, {
+  setPollWindows: (
+    clanId: number,
+    windows: { startDay: string; startTime: string; endDay: string; endTime: string }[],
+    timeZoneId: string,
+  ) =>
+    request<PollWindow[]>(`/api/clans/${clanId}/poll/windows`, {
       method: 'POST',
-      body: JSON.stringify({ cronExpression, timeZoneId }),
+      body: JSON.stringify({ windows, timeZoneId }),
     }),
-  clearPollRecurringClose: (clanId: number) =>
-    request<void>(`/api/clans/${clanId}/poll/recurring-close`, { method: 'DELETE' }),
+  clearPollWindows: (clanId: number) =>
+    request<void>(`/api/clans/${clanId}/poll/windows`, { method: 'DELETE' }),
   // Rotas públicas: o backend não exige X-Api-Key em /api/poll/* (o token do link é a credencial).
   getPublicPoll: (token: string, nickname: string) =>
     request<PollInfo>(`/api/poll/${token}?nickname=${encodeURIComponent(nickname)}`),

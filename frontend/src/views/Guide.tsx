@@ -89,9 +89,16 @@ export function Guide() {
             formulário continua visível mas para de aceitar votos novos, até você definir um prazo
             novo na aba Votação.
           </Topic>
+          <Topic title="Ciclos semanais (opcional)">
+            Em vez de um prazo fixo, dá para configurar quantos ciclos quiser (ex.: "domingo 23h até
+            segunda 11h" e "quarta 20h até quinta 11h") — a votação abre e fecha sozinha toda semana,
+            nesses horários, sem precisar mexer manualmente.
+          </Topic>
           <Topic title="Aplicar o resultado">
             Crie uma automação do tipo "Iniciar mais votada do formulário" para, no horário combinado,
             iniciar a missão vencedora (ou embaralhar, se for o caso) e zerar a urna automaticamente.
+            Com ciclos configurados, ela apura só o último ciclo já encerrado — por isso funciona bem
+            programada para rodar logo depois do fim de cada ciclo.
           </Topic>
         </div>
       </div>
