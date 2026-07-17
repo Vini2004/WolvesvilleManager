@@ -144,11 +144,23 @@ public class ScheduledTaskExecutor
     }
 
     /// <summary>
+    /// Ações do log de auditoria que significam "esta pessoa acabou de virar membro do clã".
+    /// Confirmado por log real: clã com entrada por pedido usa "JOIN_REQUEST_ACCEPTED" (o pedido em
+    /// si, antes de aceito, é "JOIN_REQUEST_SENT_BY_EXTERNAL_PLAYER" — não conta). "JOIN" e
+    /// "ACCEPT_INVITE" ficam como fallback para clãs com entrada livre ou por convite direto, cujo
+    /// valor exato não foi confirmado ainda contra um log real desses fluxos.
+    /// </summary>
+    private static readonly HashSet<string> MemberJoinedLogActions = new(StringComparer.Ordinal)
+    {
+        "JOIN_REQUEST_ACCEPTED", "JOIN", "ACCEPT_INVITE",
+    };
+
+    /// <summary>
     /// Manda a mensagem de boas-vindas no chat para quem entrou no clã desde a última checagem —
     /// só para clãs com <see cref="ClanRegistration.WelcomeMessageEnabled"/> ligado. Detecta a
-    /// entrada pelo log de auditoria (ação "JOIN"/"ACCEPT_INVITE"), não por uma lista de membros;
-    /// mora aqui pelo mesmo motivo do snapshot de XP acima — é o ponto executado com regularidade
-    /// garantida (BackgroundService + cron externo).
+    /// entrada pelo log de auditoria (<see cref="MemberJoinedLogActions"/>), não por uma lista de
+    /// membros; mora aqui pelo mesmo motivo do snapshot de XP acima — é o ponto executado com
+    /// regularidade garantida (BackgroundService + cron externo).
     /// </summary>
     private async Task WelcomeNewMembersAsync(CancellationToken ct)
     {
@@ -164,7 +176,7 @@ public class ScheduledTaskExecutor
                 var logs = await _api.GetLogsAsync(apiKey, reg.ClanId, ct);
 
                 var joins = logs
-                    .Where(l => l.Action is "JOIN" or "ACCEPT_INVITE")
+                    .Where(l => l.Action is not null && MemberJoinedLogActions.Contains(l.Action))
                     .Select(l => (Entry: l, At: ParseLogTime(l.CreationTime)))
                     .Where(x => x.At is not null)
                     .OrderBy(x => x.At)

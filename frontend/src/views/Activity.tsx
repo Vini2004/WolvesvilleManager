@@ -23,6 +23,8 @@ const LOG_ACTIONS: Record<string, string> = {
   DEMOTE: 'rebaixou',
   ACCEPT_INVITE: 'aceitou o convite',
   DECLINE_INVITE: 'recusou o convite',
+  JOIN_REQUEST_SENT_BY_EXTERNAL_PLAYER: 'pediu para entrar',
+  JOIN_REQUEST_ACCEPTED: 'pedido de entrada aceito',
 }
 
 export function Activity({ clanRegId }: { clanRegId: number }) {

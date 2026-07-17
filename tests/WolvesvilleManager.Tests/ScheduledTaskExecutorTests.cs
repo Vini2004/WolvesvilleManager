@@ -519,6 +519,49 @@ public class ScheduledTaskExecutorTests
     }
 
     [Fact]
+    public async Task WelcomeNewMembers_JoinRequestAccepted_MandaMensagemEIgnoraOPedidoEmSi()
+    {
+        // Ação real confirmada em log de produção: clã com entrada por pedido usa
+        // "JOIN_REQUEST_ACCEPTED" (não "JOIN"). O pedido em si, "JOIN_REQUEST_SENT_BY_EXTERNAL_PLAYER",
+        // não deve contar como entrada — só quando o pedido é aceito.
+        using var db = CreateDb();
+        var clan = new ClanRegistration
+        {
+            ClanId = "clan-1",
+            ClanName = "Clã de Teste",
+            ProtectedApiKey = "chave-teste",
+            WelcomeMessageEnabled = true,
+            LastWelcomedJoinAtUtc = DateTime.UtcNow.AddHours(-1),
+        };
+        db.ClanRegistrations.Add(clan);
+        db.SaveChanges();
+
+        var api = new FakeWolvesvilleClient
+        {
+            Logs =
+            [
+                new ClanLogEntry
+                {
+                    Action = "JOIN_REQUEST_SENT_BY_EXTERNAL_PLAYER",
+                    PlayerUsername = "BOB_HEROI",
+                    CreationTime = DateTime.UtcNow.AddMinutes(-2).ToString("O"),
+                },
+                new ClanLogEntry
+                {
+                    Action = "JOIN_REQUEST_ACCEPTED",
+                    PlayerUsername = "BOB_HEROI",
+                    CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
+                },
+            ],
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        var message = Assert.Single(api.SentChatMessages);
+        Assert.Contains("@BOB_HEROI", message);
+    }
+
+    [Fact]
     public async Task WelcomeNewMembers_Desligado_NaoMandaMensagem()
     {
         using var db = CreateDb();
