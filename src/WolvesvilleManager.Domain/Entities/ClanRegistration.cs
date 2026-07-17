@@ -65,8 +65,8 @@ public class ClanRegistration
 
     /// <summary>
     /// Liga a mensagem automática de boas-vindas no chat quando um membro novo entra no clã
-    /// (detectado pelo log de auditoria, ação "JOIN"/"ACCEPT_INVITE"). Desligado por padrão —
-    /// é um comportamento novo e cada clã decide se quer.
+    /// (detectado pelo log de auditoria — ver <c>ScheduledTaskExecutor.MemberJoinedLogActions</c>).
+    /// Desligado por padrão — é um comportamento novo e cada clã decide se quer.
     /// </summary>
     public bool WelcomeMessageEnabled { get; set; }
 
@@ -78,9 +78,9 @@ public class ClanRegistration
     public string? WelcomeMessageTemplate { get; set; }
 
     /// <summary>
-    /// Data (UTC) da entrada de log "JOIN"/"ACCEPT_INVITE" mais recente já recebida como
-    /// boas-vindas — evita repetir a mensagem e evita boas-vindas retroativas para quem já
-    /// estava no clã quando a feature é ligada pela primeira vez.
+    /// Data (UTC) da entrada de log de "virou membro" mais recente já recebida como boas-vindas —
+    /// evita repetir a mensagem e evita boas-vindas retroativas para quem já estava no clã quando
+    /// a feature é ligada pela primeira vez.
     /// </summary>
     public DateTime? LastWelcomedJoinAtUtc { get; set; }
 }
