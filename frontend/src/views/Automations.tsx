@@ -18,6 +18,7 @@ interface FormState {
   targetQuestName: string
   targetQuestPromoImageUrl: string
   enabled: boolean
+  autoRetryOnXpNotReached: boolean
 }
 
 const DEFAULT_FORM: FormState = {
@@ -30,6 +31,7 @@ const DEFAULT_FORM: FormState = {
   targetQuestName: '',
   targetQuestPromoImageUrl: '',
   enabled: true,
+  autoRetryOnXpNotReached: true,
 }
 
 function formFromTask(t: ScheduledTask): FormState {
@@ -44,6 +46,7 @@ function formFromTask(t: ScheduledTask): FormState {
     targetQuestName: t.targetQuestName ?? '',
     targetQuestPromoImageUrl: t.targetQuestPromoImageUrl ?? '',
     enabled: t.enabled,
+    autoRetryOnXpNotReached: t.autoRetryOnXpNotReached,
   }
 }
 
@@ -59,6 +62,7 @@ function toRequest(f: FormState): CreateScheduledTaskRequest {
     targetQuestName: specific ? f.targetQuestName || null : null,
     targetQuestPromoImageUrl: specific ? f.targetQuestPromoImageUrl || null : null,
     enabled: f.enabled,
+    autoRetryOnXpNotReached: f.autoRetryOnXpNotReached,
   }
 }
 
@@ -170,6 +174,7 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                       targetQuestName: t.targetQuestName,
                       targetQuestPromoImageUrl: t.targetQuestPromoImageUrl,
                       enabled: !t.enabled,
+                      autoRetryOnXpNotReached: t.autoRetryOnXpNotReached,
                     }),
                   )
                 }
@@ -184,6 +189,9 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                     ? ` · mín. ${t.minVotes} votos`
                     : ''}
                   {t.type === 'ClaimSpecificQuest' ? ` · ${t.targetQuestName || 'missão fixada'}` : ''}
+                  {t.type === 'SkipQuestWaitingTime' && !t.autoRetryOnXpNotReached
+                    ? ' · retentativa automática desligada'
+                    : ''}
                 </div>
               </div>
             </div>
@@ -484,6 +492,31 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                 {modal.form.type === 'ClaimMostVotedFormQuest'
                   ? 'Conta os votos do formulário público (aba Votação), incluindo "🔀 Embaralhar missões". A ação só é feita se a mais votada tiver pelo menos este número de votos.'
                   : 'A missão só é iniciada se a mais votada tiver pelo menos este número de votos.'}
+              </div>
+            </>
+          )}
+
+          {modal.form.type === 'SkipQuestWaitingTime' && (
+            <>
+              <div className="field-label mb-1.5 mt-[18px]">Retentativa automática</div>
+              <div className="flex items-center gap-3">
+                <Toggle
+                  on={modal.form.autoRetryOnXpNotReached}
+                  onClick={() =>
+                    setModal({
+                      ...modal,
+                      form: { ...modal.form, autoRetryOnXpNotReached: !modal.form.autoRetryOnXpNotReached },
+                    })
+                  }
+                />
+                <span className="font-sans text-[13px] text-muted">
+                  {modal.form.autoRetryOnXpNotReached ? 'Ativada' : 'Desativada'}
+                </span>
+              </div>
+              <div className="mt-1.5 font-sans text-[11.5px] text-dim">
+                {modal.form.autoRetryOnXpNotReached
+                  ? 'Se o XP do tier ainda não bateu no horário configurado, tenta de novo sozinha a cada 30 min, até 4 vezes.'
+                  : 'Se o XP do tier ainda não bateu no horário configurado, não tenta de novo sozinha — só no próximo horário normal desta automação.'}
               </div>
             </>
           )}

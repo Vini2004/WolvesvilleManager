@@ -218,6 +218,34 @@ public class ScheduledTaskExecutorTests
     }
 
     [Fact]
+    public async Task SkipWaitingTime_RetentativaDesligada_NaoReagendaEm30Min()
+    {
+        using var db = CreateDb();
+        var task = SeedDueTask(db, ScheduledTaskType.SkipQuestWaitingTime); // cron "*/5 * * * *"
+        task.AutoRetryOnXpNotReached = false;
+        db.SaveChanges();
+
+        var api = new FakeWolvesvilleClient
+        {
+            ActiveQuest = new ActiveQuest
+            {
+                Quest = Quest("quest-a"),
+                TierStartTime = DateTimeOffset.UtcNow.AddHours(-1).ToString("O"),
+                Xp = 100,
+                XpPerReward = 9500,
+            },
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        Assert.False(api.SkippedWaitingTime);
+        var log = Assert.Single(db.TaskExecutionLogs);
+        Assert.Equal(TaskExecutionOutcome.Skipped, log.Outcome);
+        // Sem retentativa automática: a próxima execução é a ocorrência normal do cron (~5 min), não +30min.
+        Assert.InRange(task.NextRunAtUtc!.Value, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(6));
+    }
+
+    [Fact]
     public async Task SkipWaitingTime_XpNaoBateApos4Retentativas_DesisteEVoltaAoCronNormal()
     {
         using var db = CreateDb();

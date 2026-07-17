@@ -52,6 +52,14 @@ public class ScheduledTask
     [MaxLength(500)]
     public string? TargetQuestPromoImageUrl { get; set; }
 
+    /// <summary>
+    /// Só vale para <see cref="ScheduledTaskType.SkipQuestWaitingTime"/>: quando o XP do tier ainda
+    /// não bateu o objetivo no horário configurado, tenta de novo sozinha a cada 30 min (até 4
+    /// vezes) em vez de esperar só a próxima ocorrência normal do cron. Desligado = tenta uma vez
+    /// no horário configurado e pronto (a menos que o próprio cron tenha mais horários no dia).
+    /// </summary>
+    public bool AutoRetryOnXpNotReached { get; set; } = true;
+
     /// <summary>Próxima execução, pré-calculada em UTC (indexada para o poll do agendador).</summary>
     public DateTime? NextRunAtUtc { get; set; }
 

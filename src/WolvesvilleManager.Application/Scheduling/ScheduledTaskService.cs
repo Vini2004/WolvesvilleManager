@@ -53,6 +53,7 @@ public class ScheduledTaskService
             TargetQuestName = request.TargetQuestName?.Trim(),
             TargetQuestPromoImageUrl = request.TargetQuestPromoImageUrl?.Trim(),
             Enabled = request.Enabled,
+            AutoRetryOnXpNotReached = request.AutoRetryOnXpNotReached,
         };
         task.NextRunAtUtc = task.Enabled
             ? CronScheduleCalculator.GetNextOccurrenceUtc(task.CronExpression, task.TimeZoneId, DateTime.UtcNow)
@@ -81,6 +82,7 @@ public class ScheduledTaskService
         task.TargetQuestName = request.TargetQuestName?.Trim();
         task.TargetQuestPromoImageUrl = request.TargetQuestPromoImageUrl?.Trim();
         task.Enabled = request.Enabled;
+        task.AutoRetryOnXpNotReached = request.AutoRetryOnXpNotReached;
         task.NextRunAtUtc = task.Enabled
             ? CronScheduleCalculator.GetNextOccurrenceUtc(task.CronExpression, task.TimeZoneId, DateTime.UtcNow)
             : null;
@@ -169,7 +171,7 @@ public class ScheduledTaskService
     private static ScheduledTaskDto ToDto(ScheduledTask t) => new(
         t.Id, t.ClanRegistrationId, t.Type, t.CronExpression, t.TimeZoneId,
         t.Enabled, t.MinVotes, t.TargetQuestId, t.TargetQuestName, t.TargetQuestPromoImageUrl,
-        t.NextRunAtUtc, t.LastRunAtUtc, t.CreatedAtUtc);
+        t.AutoRetryOnXpNotReached, t.NextRunAtUtc, t.LastRunAtUtc, t.CreatedAtUtc);
 }
 
 public record CreateScheduledTaskRequest(
@@ -180,7 +182,8 @@ public record CreateScheduledTaskRequest(
     string? TargetQuestId = null,
     string? TargetQuestName = null,
     string? TargetQuestPromoImageUrl = null,
-    bool Enabled = true);
+    bool Enabled = true,
+    bool AutoRetryOnXpNotReached = true);
 
 public record ScheduledTaskDto(
     int Id,
@@ -193,6 +196,7 @@ public record ScheduledTaskDto(
     string? TargetQuestId,
     string? TargetQuestName,
     string? TargetQuestPromoImageUrl,
+    bool AutoRetryOnXpNotReached,
     DateTime? NextRunAtUtc,
     DateTime? LastRunAtUtc,
     DateTime CreatedAtUtc);
