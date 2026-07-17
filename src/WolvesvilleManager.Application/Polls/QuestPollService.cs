@@ -85,11 +85,15 @@ public class QuestPollService
 
         var reg = await ResolveByTokenAsync(token, ct);
 
-        // Só aceita voto em missão que está de fato disponível agora (a lista rotaciona).
-        var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
-        var available = await _api.GetAvailableQuestsAsync(apiKey, reg.ClanId, ct);
-        if (!available.Any(q => q.Id == questId))
-            throw new BusinessRuleException("Essa missão não está mais disponível — recarregue a página.");
+        // "Embaralhar" é sempre uma opção válida; missão de verdade precisa estar disponível agora
+        // (a lista rotaciona).
+        if (questId != QuestPollVote.ShuffleOptionId)
+        {
+            var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
+            var available = await _api.GetAvailableQuestsAsync(apiKey, reg.ClanId, ct);
+            if (!available.Any(q => q.Id == questId))
+                throw new BusinessRuleException("Essa missão não está mais disponível — recarregue a página.");
+        }
 
         var vote = await _db.QuestPollVotes
             .FirstOrDefaultAsync(v => v.ClanRegistrationId == reg.Id && v.VoterId == voterId, ct);
@@ -99,24 +103,6 @@ public class QuestPollService
             vote.QuestId = questId;
 
         await _db.SaveChangesAsync(ct);
-    }
-
-    /// <summary>
-    /// Página pública: embaralha as missões disponíveis (gasta ouro do clã, igual à aba admin)
-    /// e zera a urna — os votos antigos eram para as missões que acabaram de sair de cartaz.
-    /// </summary>
-    public async Task<PollDto> ShuffleAsync(string token, CancellationToken ct = default)
-    {
-        var reg = await ResolveByTokenAsync(token, ct);
-        var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
-
-        await _api.ShuffleQuestsAsync(apiKey, reg.ClanId, ct);
-        await _db.QuestPollVotes
-            .Where(v => v.ClanRegistrationId == reg.Id)
-            .ExecuteDeleteAsync(ct);
-
-        var quests = await BuildQuestsAsync(reg.Id, apiKey, reg.ClanId, ct);
-        return new PollDto(reg.ClanName, reg.ClanTag, quests, null);
     }
 
     private async Task<ClanRegistration> ResolveByTokenAsync(string token, CancellationToken ct)
@@ -137,8 +123,16 @@ public class QuestPollService
             .ToDictionaryAsync(g => g.Key, g => g.Count, ct);
 
         // Votos em missões que saíram de cartaz simplesmente não aparecem (nem contam na apuração).
-        return available
+        var quests = available
             .Select(q => new PollQuestDto(q.Id, q.DisplayName, q.PromoImageUrl, q.PurchasableWithGems, counts.GetValueOrDefault(q.Id)))
             .ToList();
+
+        // "Embaralhar" é mais uma cédula na mesma urna — se vencer, a automação embaralha
+        // em vez de reivindicar uma missão (ver ScheduledTaskExecutor.ClaimMostVotedFormQuestAsync).
+        quests.Add(new PollQuestDto(
+            QuestPollVote.ShuffleOptionId, "Embaralhar missões", null, false,
+            counts.GetValueOrDefault(QuestPollVote.ShuffleOptionId)));
+
+        return quests;
     }
 }

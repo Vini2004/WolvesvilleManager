@@ -186,7 +186,9 @@ public class ScheduledTaskExecutor
 
     /// <summary>
     /// Igual à mais votada, mas a urna é o formulário público (votos no nosso banco,
-    /// um por navegador) em vez dos votos de dentro do jogo. Limpa a urna após iniciar.
+    /// um por navegador) em vez dos votos de dentro do jogo. "Embaralhar missões" concorre
+    /// como mais uma candidata na mesma urna — se vencer, embaralha em vez de reivindicar.
+    /// Limpa a urna depois de qualquer resultado (missão iniciada ou embaralhado).
     /// </summary>
     private async Task<(TaskExecutionOutcome, string)> ClaimMostVotedFormQuestAsync(
         ScheduledTask task, string apiKey, string clanId, CancellationToken ct)
@@ -195,9 +197,9 @@ public class ScheduledTaskExecutor
         if (active is not null)
             return (TaskExecutionOutcome.Skipped, "Já existe uma missão ativa — nada a iniciar.");
 
+        // Não corta na cara quando não há missão disponível: se a urna elegeu "embaralhar",
+        // é exatamente essa situação (ou o gosto do clã) que ele resolve.
         var available = await GetAvailableQuestsSafeAsync(apiKey, clanId, ct);
-        if (available.Count == 0)
-            return (TaskExecutionOutcome.Skipped, "Não há missões disponíveis no momento.");
 
         var votes = await _db.QuestPollVotes
             .Where(v => v.ClanRegistrationId == task.ClanRegistrationId)
@@ -205,24 +207,38 @@ public class ScheduledTaskExecutor
             .Select(g => new { g.Key, Count = g.Count() })
             .ToDictionaryAsync(g => g.Key, g => g.Count, ct);
 
-        // Empate: vence a que aparece primeiro na lista de disponíveis (ordem da API).
+        // Candidatas: cada missão disponível + "embaralhar". Empate entre missões: vence a
+        // que aparece primeiro na lista de disponíveis; "embaralhar" só desempata por último
+        // (item.Quest is null ordena depois via ThenBy) — prefere iniciar a jogar fora.
         var winner = available
-            .Select(q => (Quest: q, Votes: votes.GetValueOrDefault(q.Id)))
+            .Select(q => (Quest: (ClanQuest?)q, Votes: votes.GetValueOrDefault(q.Id)))
+            .Append((Quest: (ClanQuest?)null, Votes: votes.GetValueOrDefault(QuestPollVote.ShuffleOptionId)))
             .OrderByDescending(x => x.Votes)
+            .ThenBy(x => x.Quest is null)
             .First();
 
         if (winner.Votes < task.MinVotes)
+        {
+            var context = available.Count == 0
+                ? "não há missões disponíveis no momento; a candidata com mais votos no formulário"
+                : "no formulário, a candidata com mais votos";
             return (TaskExecutionOutcome.Skipped,
-                $"Votos insuficientes no formulário: a mais votada (\"{winner.Quest.DisplayName}\") tem " +
-                $"{winner.Votes} voto(s), mínimo configurado é {task.MinVotes}.");
+                $"Votos insuficientes: {context} tem {winner.Votes} voto(s), mínimo configurado é {task.MinVotes}.");
+        }
 
-        await _api.ClaimQuestAsync(apiKey, clanId, winner.Quest.Id, ct);
-
-        // Urna limpa: a próxima rodada de missões começa do zero.
+        // Urna limpa: a próxima rodada (de missões ou de embaralhar) começa do zero.
         await _db.QuestPollVotes
             .Where(v => v.ClanRegistrationId == task.ClanRegistrationId)
             .ExecuteDeleteAsync(ct);
 
+        if (winner.Quest is null)
+        {
+            await _api.ShuffleQuestsAsync(apiKey, clanId, ct);
+            return (TaskExecutionOutcome.Success,
+                $"Formulário votou por embaralhar as missões ({winner.Votes} voto(s)); ouro debitado.");
+        }
+
+        await _api.ClaimQuestAsync(apiKey, clanId, winner.Quest.Id, ct);
         var currency = winner.Quest.PurchasableWithGems ? "gemas" : "ouro";
         return (TaskExecutionOutcome.Success,
             $"Missão \"{winner.Quest.DisplayName}\" iniciada com {winner.Votes} voto(s) do formulário (paga com {currency}).");

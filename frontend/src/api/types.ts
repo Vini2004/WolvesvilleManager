@@ -99,7 +99,12 @@ export type ScheduledTaskType =
 
 export type TaskExecutionOutcome = 'Success' | 'Skipped' | 'Failed'
 
-/** Missão candidata no formulário público de votação. */
+// Mesmo valor de WolvesvilleManager.Domain.Entities.QuestPollVote.ShuffleOptionId: não é uma
+// missão de verdade, é mais uma cédula na urna — se vencer, a automação embaralha em vez de
+// reivindicar uma missão.
+export const SHUFFLE_OPTION_ID = '__shuffle__'
+
+/** Missão candidata no formulário público de votação (ou o card de embaralhar). */
 export interface PollQuest {
   questId: string
   name: string

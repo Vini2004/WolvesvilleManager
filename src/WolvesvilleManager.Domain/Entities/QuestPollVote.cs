@@ -9,12 +9,19 @@ namespace WolvesvilleManager.Domain.Entities;
 /// </summary>
 public class QuestPollVote
 {
+    /// <summary>
+    /// QuestId reservado para o voto "embaralhar": não é uma missão de verdade, é uma
+    /// cédula a mais na mesma urna. Se vencer a apuração, a automação embaralha em vez
+    /// de reivindicar uma missão. Nunca colide com um Id real (que vem da API do jogo).
+    /// </summary>
+    public const string ShuffleOptionId = "__shuffle__";
+
     public long Id { get; set; }
 
     public int ClanRegistrationId { get; set; }
     public ClanRegistration ClanRegistration { get; set; } = null!;
 
-    /// <summary>Id da missão (da API do Wolvesville) escolhida.</summary>
+    /// <summary>Id da missão escolhida (da API do Wolvesville), ou <see cref="ShuffleOptionId"/>.</summary>
     [Required]
     [MaxLength(64)]
     public string QuestId { get; set; } = string.Empty;

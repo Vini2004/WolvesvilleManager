@@ -35,16 +35,15 @@ public class QuestPollController : ControllerBase
     public async Task<PollDto> GetPublic(string token, [FromQuery] string? voterId, CancellationToken ct) =>
         await _service.GetPublicAsync(token, voterId, ct);
 
-    /// <summary>Página pública: registra ou troca o voto deste navegador.</summary>
+    /// <summary>
+    /// Página pública: registra ou troca o voto deste navegador. "Embaralhar" também é
+    /// votado aqui (QuestId = <see cref="Domain.Entities.QuestPollVote.ShuffleOptionId"/>) —
+    /// não é uma ação imediata, é mais uma cédula na urna.
+    /// </summary>
     [HttpPost("api/poll/{token}/vote")]
     public async Task<IActionResult> Vote(string token, [FromBody] VoteRequest request, CancellationToken ct)
     {
         await _service.VoteAsync(token, request.QuestId, request.VoterId, ct);
         return NoContent();
     }
-
-    /// <summary>Página pública: embaralha as missões disponíveis (gasta ouro do clã) e zera a urna.</summary>
-    [HttpPost("api/poll/{token}/shuffle")]
-    public async Task<PollDto> Shuffle(string token, CancellationToken ct) =>
-        await _service.ShuffleAsync(token, ct);
 }

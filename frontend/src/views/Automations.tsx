@@ -482,7 +482,7 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
               />
               <div className="mt-1.5 font-sans text-[11.5px] text-dim">
                 {modal.form.type === 'ClaimMostVotedFormQuest'
-                  ? 'Conta os votos do formulário público (aba Votação). A missão só é iniciada se a mais votada tiver pelo menos este número de votos.'
+                  ? 'Conta os votos do formulário público (aba Votação), incluindo "🔀 Embaralhar missões". A ação só é feita se a mais votada tiver pelo menos este número de votos.'
                   : 'A missão só é iniciada se a mais votada tiver pelo menos este número de votos.'}
               </div>
             </>

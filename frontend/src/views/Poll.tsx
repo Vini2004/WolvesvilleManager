@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api, ApiError } from '../api/client'
+import { SHUFFLE_OPTION_ID } from '../api/types'
 import { ErrorBox, Loading, SectionTitle } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 
@@ -43,9 +44,11 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
         <div className="mb-2 font-serif text-xl font-semibold text-ink">Link da votação</div>
         <div className="mb-4 font-sans text-[13px] leading-relaxed text-muted">
           Compartilhe este link com o clã (Discord, WhatsApp, anúncio no jogo…). Quem abrir vê só o
-          formulário com as missões disponíveis e vota uma vez por navegador — sem login. Crie uma
-          automação do tipo <span className="font-bold text-lav">Iniciar mais votada do formulário</span>{' '}
-          para iniciar a vencedora no horário combinado; a urna é zerada quando a missão inicia.
+          formulário com as missões disponíveis (mais a opção "🔀 Embaralhar missões", caso ninguém
+          goste das atuais) e vota uma vez por navegador — sem login. Crie uma automação do tipo{' '}
+          <span className="font-bold text-lav">Iniciar mais votada do formulário</span> para aplicar o
+          resultado no horário combinado: inicia a missão vencedora, ou embaralha se "Embaralhar" vencer;
+          a urna é zerada em ambos os casos.
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <input readOnly value={link} onFocus={(e) => e.target.select()} className="input-dark flex-1 basis-64" />
@@ -68,19 +71,17 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
           <ErrorBox message={error} />
         </div>
       )}
-      {poll.data.quests.length === 0 ? (
-        <div className="list-card px-5 py-4 font-sans text-[13px] text-muted">
-          Não há missões disponíveis no momento — o formulário mostra a mesma lista da aba Missões.
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {poll.data.quests.map((q) => (
+      <div className="flex flex-col gap-3">
+        {poll.data.quests.map((q) => {
+          const isShuffle = q.questId === SHUFFLE_OPTION_ID
+          return (
             <div key={q.questId} className="list-card px-5 py-4">
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0 font-sans text-[14px] font-semibold text-ink-2">
+                  {isShuffle ? '🔀 ' : ''}
                   {q.name}
                   <span className="ml-2 font-sans text-[11.5px] font-normal text-faint">
-                    {q.gems ? 'gemas' : 'ouro'}
+                    {isShuffle ? 'reabre a votação' : q.gems ? 'gemas' : 'ouro'}
                   </span>
                 </div>
                 <div className="flex-none font-mono text-[13px] text-gold">
@@ -94,9 +95,9 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
                 />
               </div>
             </div>
-          ))}
-        </div>
-      )}
+          )
+        })}
+      </div>
     </div>
   )
 }
