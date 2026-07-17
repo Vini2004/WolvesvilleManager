@@ -39,7 +39,11 @@ export function Guide() {
             Ordenados por líder → vice-líderes → o resto por XP.
           </Topic>
           <Topic title="Anúncios">Publica um aviso para todo o clã, pelo bot.</Topic>
-          <Topic title="Chat">Lê e envia mensagens no chat do clã pelo bot.</Topic>
+          <Topic title="Chat">
+            Lê e envia mensagens no chat do clã pelo bot. Também dá para ligar uma mensagem de
+            boas-vindas automática (com "{'{mention}'}" marcando quem entrou) que dispara sozinha
+            quando alguém novo entra no clã.
+          </Topic>
           <Topic title="Atividade">Livro-razão de ouro/gemas por membro e o log de auditoria do clã.</Topic>
           <Topic title="Jogo">
             Resgate do chapéu exclusivo da API, edição de flair, busca de jogadores, battle pass, loja

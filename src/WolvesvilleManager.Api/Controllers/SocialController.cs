@@ -4,6 +4,8 @@ using WolvesvilleManager.Domain.Wolvesville;
 
 namespace WolvesvilleManager.Api.Controllers;
 
+public record SetWelcomeSettingsRequest(bool Enabled, string Template);
+
 /// <summary>Chat, livro-razão e logs de auditoria do clã.</summary>
 [ApiController]
 [Route("api/clans/{id:int}")]
@@ -24,6 +26,18 @@ public class SocialController : ControllerBase
     public async Task<IActionResult> SendChat(int id, [FromBody] AnnouncementRequest request, CancellationToken ct)
     {
         await _service.SendChatMessageAsync(id, request.Message, ct);
+        return NoContent();
+    }
+
+    /// <summary>Configuração da mensagem automática de boas-vindas para membros novos.</summary>
+    [HttpGet("welcome")]
+    public Task<WelcomeSettingsDto> GetWelcomeSettings(int id, CancellationToken ct) =>
+        _service.GetWelcomeSettingsAsync(id, ct);
+
+    [HttpPut("welcome")]
+    public async Task<IActionResult> SetWelcomeSettings(int id, [FromBody] SetWelcomeSettingsRequest request, CancellationToken ct)
+    {
+        await _service.SetWelcomeSettingsAsync(id, request.Enabled, request.Template, ct);
         return NoContent();
     }
 

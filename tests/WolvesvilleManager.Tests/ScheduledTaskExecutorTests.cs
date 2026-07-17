@@ -447,4 +447,107 @@ public class ScheduledTaskExecutorTests
         Assert.Equal(0, executed);
         Assert.Empty(db.TaskExecutionLogs);
     }
+
+    [Fact]
+    public async Task WelcomeNewMembers_PrimeiraChecagem_SoMarcaAReguaSemMandarMensagem()
+    {
+        using var db = CreateDb();
+        var clan = new ClanRegistration
+        {
+            ClanId = "clan-1",
+            ClanName = "Clã de Teste",
+            ProtectedApiKey = "chave-teste",
+            WelcomeMessageEnabled = true,
+        };
+        db.ClanRegistrations.Add(clan);
+        db.SaveChanges();
+
+        var api = new FakeWolvesvilleClient
+        {
+            Logs =
+            [
+                new ClanLogEntry
+                {
+                    Action = "JOIN",
+                    PlayerUsername = "Fulano",
+                    CreationTime = DateTimeOffset.UtcNow.AddMinutes(-5).ToString("O"),
+                },
+            ],
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        Assert.Empty(api.SentChatMessages);
+        Assert.NotNull(clan.LastWelcomedJoinAtUtc);
+    }
+
+    [Fact]
+    public async Task WelcomeNewMembers_EntradaNovaAposARegua_MandaMensagemMarcandoOJogador()
+    {
+        using var db = CreateDb();
+        var clan = new ClanRegistration
+        {
+            ClanId = "clan-1",
+            ClanName = "Clã de Teste",
+            ProtectedApiKey = "chave-teste",
+            WelcomeMessageEnabled = true,
+            LastWelcomedJoinAtUtc = DateTime.UtcNow.AddHours(-1),
+        };
+        db.ClanRegistrations.Add(clan);
+        db.SaveChanges();
+        var before = clan.LastWelcomedJoinAtUtc;
+
+        var api = new FakeWolvesvilleClient
+        {
+            Logs =
+            [
+                new ClanLogEntry
+                {
+                    Action = "JOIN",
+                    PlayerUsername = "Fulano",
+                    CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
+                },
+            ],
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        var message = Assert.Single(api.SentChatMessages);
+        Assert.Contains("@Fulano", message);
+        Assert.Contains("Seja Bem-Vindo", message);
+        Assert.True(clan.LastWelcomedJoinAtUtc > before);
+    }
+
+    [Fact]
+    public async Task WelcomeNewMembers_Desligado_NaoMandaMensagem()
+    {
+        using var db = CreateDb();
+        var clan = new ClanRegistration
+        {
+            ClanId = "clan-1",
+            ClanName = "Clã de Teste",
+            ProtectedApiKey = "chave-teste",
+            WelcomeMessageEnabled = false,
+            LastWelcomedJoinAtUtc = DateTime.UtcNow.AddHours(-1),
+        };
+        db.ClanRegistrations.Add(clan);
+        db.SaveChanges();
+
+        var api = new FakeWolvesvilleClient
+        {
+            Logs =
+            [
+                new ClanLogEntry
+                {
+                    Action = "JOIN",
+                    PlayerUsername = "Fulano",
+                    CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
+                },
+            ],
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        Assert.Empty(api.SentChatMessages);
+    }
 }

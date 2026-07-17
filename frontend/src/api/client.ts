@@ -22,6 +22,7 @@ import type {
   RegisteredClan,
   ScheduledTask,
   TaskExecutionLog,
+  WelcomeSettings,
   XpReport,
 } from './types'
 
@@ -167,6 +168,12 @@ export const api = {
     }),
   getLedger: (clanId: number) => request<LedgerEntry[]>(`/api/clans/${clanId}/ledger`),
   getLogs: (clanId: number) => request<ClanLogEntry[]>(`/api/clans/${clanId}/logs`),
+  getWelcomeSettings: (clanId: number) => request<WelcomeSettings>(`/api/clans/${clanId}/welcome`),
+  setWelcomeSettings: (clanId: number, enabled: boolean, template: string) =>
+    request<void>(`/api/clans/${clanId}/welcome`, {
+      method: 'PUT',
+      body: JSON.stringify({ enabled, template }),
+    }),
 
   // ---------- Jogo ----------
   redeemApiHat: (clanId: number) =>
