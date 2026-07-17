@@ -100,7 +100,7 @@ export type ScheduledTaskType =
   | 'SkipQuestWaitingTime'
   | 'ClaimQuestExtraTime'
 
-export type TaskExecutionOutcome = 'Success' | 'Skipped' | 'Failed'
+export type TaskExecutionOutcome = 'Success' | 'Skipped' | 'Failed' | 'WaitingForXp'
 
 // Mesmo valor de WolvesvilleManager.Domain.Entities.QuestPollVote.ShuffleOptionId: não é uma
 // missão de verdade, é mais uma cédula na urna — se vencer, a automação embaralha em vez de

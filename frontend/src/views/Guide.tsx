@@ -56,11 +56,12 @@ export function Guide() {
             deve acontecer: iniciar a missão mais votada (por dentro do jogo ou pelo formulário
             público), iniciar uma missão específica, pular o tempo de espera ou resgatar tempo extra.
           </Topic>
-          <Topic title="Pular espera com retentativa">
-            Ela só age quando o XP do tier já bateu o objetivo. Para tentar de novo se ainda não bateu,
-            coloque mais de um horário no cron do mesmo dia (ex.: <span className="font-mono text-lav">0 18,20,22 * * SEG-SEX</span>)
-            — a automação garante no máximo 1 pulo por dia, então as tentativas seguintes não arriscam
-            pular a espera do tier errado.
+          <Topic title="Pular espera com retentativa automática">
+            Ela só age quando o XP do tier já bateu o objetivo. Se ainda não bateu no horário
+            configurado, o app tenta de novo sozinho a cada 30 minutos, até 4 vezes — não precisa
+            colocar vários horários no cron. Depois da 4ª retentativa sem sucesso, só tenta de novo
+            no próximo horário normal da automação. E ela garante no máximo 1 pulo por dia, então as
+            tentativas seguintes não arriscam pular a espera do tier errado.
           </Topic>
           <Topic title="Cada automação acorda o app sozinha">
             O app fica "dormindo" na maior parte do tempo (hospedagem gratuita); cada automação cria um

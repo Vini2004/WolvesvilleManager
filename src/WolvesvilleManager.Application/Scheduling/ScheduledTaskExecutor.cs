@@ -18,6 +18,11 @@ namespace WolvesvilleManager.Application.Scheduling;
 /// </summary>
 public class ScheduledTaskExecutor
 {
+    /// <summary>Quantas retentativas automáticas de 30 em 30 min são feitas no mesmo dia quando o XP do tier ainda não bateu.</summary>
+    private const int MaxAutoRetries = 4;
+
+    private static readonly TimeSpan AutoRetryInterval = TimeSpan.FromMinutes(30);
+
     private readonly IAppDbContext _db;
     private readonly IWolvesvilleClient _api;
     private readonly IApiKeyProtector _protector;
@@ -51,10 +56,11 @@ public class ScheduledTaskExecutor
 
             TaskExecutionOutcome outcome;
             string message;
+            DateTime? nextRunOverrideUtc = null;
             try
             {
                 var apiKey = _protector.Unprotect(task.ClanRegistration.ProtectedApiKey, task.ClanRegistrationId);
-                (outcome, message) = await ExecuteAsync(task, apiKey, ct);
+                (outcome, message, nextRunOverrideUtc) = await ExecuteAsync(task, apiKey, ct);
             }
             catch (Exception ex) when (ex is WolvesvilleApiException or HttpRequestException or ApiKeyUnprotectException)
             {
@@ -65,8 +71,11 @@ public class ScheduledTaskExecutor
             task.LastRunAtUtc = DateTime.UtcNow;
             // Próxima ocorrência calculada a partir de agora — se o app ficou fora do ar e
             // acumulou várias ocorrências perdidas, executa uma única vez e segue o calendário.
-            task.NextRunAtUtc = CronScheduleCalculator.GetNextOccurrenceUtc(
-                task.CronExpression, task.TimeZoneId, DateTime.UtcNow);
+            // Uma retentativa automática (ex.: "pular espera" com XP ainda não batido) pode pedir
+            // um horário mais cedo que a próxima ocorrência normal do cron — nesse caso, usa o
+            // horário pedido em vez de pular direto para a próxima ocorrência.
+            task.NextRunAtUtc = nextRunOverrideUtc
+                ?? CronScheduleCalculator.GetNextOccurrenceUtc(task.CronExpression, task.TimeZoneId, DateTime.UtcNow);
 
             _db.TaskExecutionLogs.Add(new TaskExecutionLog
             {
@@ -132,20 +141,23 @@ public class ScheduledTaskExecutor
         }
     }
 
-    private async Task<(TaskExecutionOutcome, string)> ExecuteAsync(
+    private async Task<(TaskExecutionOutcome Outcome, string Message, DateTime? NextRunOverrideUtc)> ExecuteAsync(
         ScheduledTask task, string apiKey, CancellationToken ct)
     {
         var clanId = task.ClanRegistration.ClanId;
         return task.Type switch
         {
-            ScheduledTaskType.ClaimMostVotedQuest => await ClaimMostVotedQuestAsync(task, apiKey, clanId, ct),
-            ScheduledTaskType.ClaimMostVotedFormQuest => await ClaimMostVotedFormQuestAsync(task, apiKey, clanId, ct),
-            ScheduledTaskType.ClaimSpecificQuest => await ClaimSpecificQuestAsync(task, apiKey, clanId, ct),
+            ScheduledTaskType.ClaimMostVotedQuest => NoOverride(await ClaimMostVotedQuestAsync(task, apiKey, clanId, ct)),
+            ScheduledTaskType.ClaimMostVotedFormQuest => NoOverride(await ClaimMostVotedFormQuestAsync(task, apiKey, clanId, ct)),
+            ScheduledTaskType.ClaimSpecificQuest => NoOverride(await ClaimSpecificQuestAsync(task, apiKey, clanId, ct)),
             ScheduledTaskType.SkipQuestWaitingTime => await SkipWaitingTimeAsync(task, apiKey, clanId, ct),
-            ScheduledTaskType.ClaimQuestExtraTime => await ClaimExtraTimeAsync(apiKey, clanId, ct),
-            _ => (TaskExecutionOutcome.Failed, $"Tipo de tarefa desconhecido: {task.Type}."),
+            ScheduledTaskType.ClaimQuestExtraTime => NoOverride(await ClaimExtraTimeAsync(apiKey, clanId, ct)),
+            _ => (TaskExecutionOutcome.Failed, $"Tipo de tarefa desconhecido: {task.Type}.", null),
         };
     }
+
+    private static (TaskExecutionOutcome, string, DateTime?) NoOverride((TaskExecutionOutcome Outcome, string Message) r) =>
+        (r.Outcome, r.Message, null);
 
     private async Task<(TaskExecutionOutcome, string)> ClaimMostVotedQuestAsync(
         ScheduledTask task, string apiKey, string clanId, CancellationToken ct)
@@ -334,13 +346,12 @@ public class ScheduledTaskExecutor
             $"Missão \"{target.DisplayName}\" iniciada (paga com {currency}).");
     }
 
-    private async Task<(TaskExecutionOutcome, string)> SkipWaitingTimeAsync(
+    private async Task<(TaskExecutionOutcome, string, DateTime?)> SkipWaitingTimeAsync(
         ScheduledTask task, string apiKey, string clanId, CancellationToken ct)
     {
-        // No máximo UM pulo por dia (no fuso da tarefa). Permite agendar horários de
-        // retentativa no próprio cron (ex.: "0 18,20,22 * * SEG-SEX": se às 18h o XP do
-        // tier ainda não bateu, tenta às 20h e às 22h) sem o risco de uma tentativa
-        // extra pular a espera do tier SEGUINTE — que o plano manda deixar abrir sozinho.
+        // No máximo UM pulo por dia (no fuso da tarefa) — sem isso, uma retentativa automática
+        // depois do pulo já ter dado certo arriscaria pular a espera do tier SEGUINTE, que o
+        // plano manda deixar abrir sozinho.
         var tz = TimeZoneInfo.FindSystemTimeZoneById(task.TimeZoneId);
         var dayStartUtc = TimeZoneInfo.ConvertTimeToUtc(
             TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Date, tz);
@@ -350,19 +361,39 @@ public class ScheduledTaskExecutor
                  && l.RanAtUtc >= dayStartUtc, ct);
         if (skippedToday)
             return (TaskExecutionOutcome.Skipped,
-                "A espera de hoje já foi pulada por esta automação — as próximas ocorrências do dia são só retentativa.");
+                "A espera de hoje já foi pulada por esta automação — as próximas ocorrências do dia são só retentativa.", null);
 
         var active = await GetActiveQuestSafeAsync(apiKey, clanId, ct);
         if (active is null)
-            return (TaskExecutionOutcome.Skipped, "Não há missão ativa — nada a pular.");
+            return (TaskExecutionOutcome.Skipped, "Não há missão ativa — nada a pular.", null);
         if (!active.CanSkipWaitingTime)
-            return (TaskExecutionOutcome.Skipped,
-                "O XP do tier ainda não bateu o objetivo — nada a pular agora. Se o cron tiver mais " +
-                "horários hoje (ex.: 18,20,22h), a próxima ocorrência tenta de novo.");
+        {
+            // Conta as retentativas de HOJE (+1 desta, que ainda não foi gravada) para decidir se
+            // ainda vale reagendar em 30 min ou se já é hora de desistir até a próxima ocorrência
+            // normal do cron (ex.: a mesma automação, semana que vem).
+            var retriesSoFar = await _db.TaskExecutionLogs.CountAsync(
+                l => l.ScheduledTaskId == task.Id
+                     && l.Outcome == TaskExecutionOutcome.WaitingForXp
+                     && l.RanAtUtc >= dayStartUtc, ct) + 1;
+
+            if (retriesSoFar <= MaxAutoRetries)
+            {
+                var retryAtUtc = DateTime.UtcNow.Add(AutoRetryInterval);
+                var retryAtLocal = TimeZoneInfo.ConvertTimeFromUtc(retryAtUtc, tz);
+                return (TaskExecutionOutcome.WaitingForXp,
+                    $"O XP do tier ainda não bateu o objetivo — nada a pular agora. Tenta de novo automaticamente " +
+                    $"às {retryAtLocal:HH:mm} (retentativa {retriesSoFar}/{MaxAutoRetries}).",
+                    retryAtUtc);
+            }
+
+            return (TaskExecutionOutcome.WaitingForXp,
+                $"O XP do tier ainda não bateu o objetivo — nada a pular agora. As {MaxAutoRetries} retentativas " +
+                "automáticas de hoje já se esgotaram; a próxima tentativa é no horário normal desta automação.", null);
+        }
 
         await _api.SkipQuestWaitingTimeAsync(apiKey, clanId, ct);
         return (TaskExecutionOutcome.Success,
-            $"Tempo de espera da missão \"{active.Quest.DisplayName}\" pulado (ouro debitado).");
+            $"Tempo de espera da missão \"{active.Quest.DisplayName}\" pulado (ouro debitado).", null);
     }
 
     private async Task<(TaskExecutionOutcome, string)> ClaimExtraTimeAsync(

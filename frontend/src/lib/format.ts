@@ -107,6 +107,7 @@ export const OUTCOME_META: Record<TaskExecutionOutcome, { label: string; color: 
   Success: { label: 'Sucesso', color: '#7fd99a' },
   Skipped: { label: 'Ignorado', color: '#e8c98a' },
   Failed: { label: 'Falhou', color: '#d9695f' },
+  WaitingForXp: { label: 'Retentativa automática', color: '#8ab4e8' },
 }
 
 const WEEKDAYS: Record<string, string> = {
