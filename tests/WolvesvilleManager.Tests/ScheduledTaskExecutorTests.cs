@@ -191,10 +191,10 @@ public class ScheduledTaskExecutorTests
     }
 
     [Fact]
-    public async Task SkipWaitingTime_AindaAcumulandoXp_NaoPula()
+    public async Task SkipWaitingTime_AindaAcumulandoXp_NaoPulaEReagendaRetentativaEm30Min()
     {
         using var db = CreateDb();
-        SeedDueTask(db, ScheduledTaskType.SkipQuestWaitingTime);
+        var task = SeedDueTask(db, ScheduledTaskType.SkipQuestWaitingTime); // cron "*/5 * * * *"
         var api = new FakeWolvesvilleClient
         {
             ActiveQuest = new ActiveQuest
@@ -211,7 +211,47 @@ public class ScheduledTaskExecutorTests
 
         Assert.False(api.SkippedWaitingTime);
         var log = Assert.Single(db.TaskExecutionLogs);
-        Assert.Equal(TaskExecutionOutcome.Skipped, log.Outcome);
+        Assert.Equal(TaskExecutionOutcome.WaitingForXp, log.Outcome);
+        // Retentativa automática em ~30 min — bem além da próxima ocorrência do cron (a cada 5 min),
+        // confirmando que o reagendamento usou o override, não o cron normal.
+        Assert.InRange(task.NextRunAtUtc!.Value, DateTime.UtcNow.AddMinutes(25), DateTime.UtcNow.AddMinutes(35));
+    }
+
+    [Fact]
+    public async Task SkipWaitingTime_XpNaoBateApos4Retentativas_DesisteEVoltaAoCronNormal()
+    {
+        using var db = CreateDb();
+        var task = SeedDueTask(db, ScheduledTaskType.SkipQuestWaitingTime); // cron "*/5 * * * *"
+        // 4 retentativas automáticas já registradas hoje (o máximo permitido).
+        for (var i = 1; i <= 4; i++)
+        {
+            db.TaskExecutionLogs.Add(new TaskExecutionLog
+            {
+                ScheduledTaskId = task.Id,
+                RanAtUtc = DateTime.UtcNow.AddMinutes(-10 * i),
+                Outcome = TaskExecutionOutcome.WaitingForXp,
+            });
+        }
+        db.SaveChanges();
+
+        var api = new FakeWolvesvilleClient
+        {
+            ActiveQuest = new ActiveQuest
+            {
+                Quest = Quest("quest-a"),
+                TierStartTime = DateTimeOffset.UtcNow.AddHours(-1).ToString("O"),
+                Xp = 100,
+                XpPerReward = 9500,
+            },
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        var log = db.TaskExecutionLogs.OrderByDescending(l => l.Id).First();
+        Assert.Equal(TaskExecutionOutcome.WaitingForXp, log.Outcome);
+        // Já eram 4 retentativas hoje: desiste do reagendamento em 30min e volta para a próxima
+        // ocorrência normal do cron (a cada 5 min), não outros 30min à frente.
+        Assert.InRange(task.NextRunAtUtc!.Value, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(6));
     }
 
     [Fact]

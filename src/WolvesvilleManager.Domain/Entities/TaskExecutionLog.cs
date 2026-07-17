@@ -29,4 +29,11 @@ public enum TaskExecutionOutcome
 
     /// <summary>A API retornou erro ou houve falha de comunicação.</summary>
     Failed = 3,
+
+    /// <summary>
+    /// Específico do "Pular tempo de espera": o XP do tier ainda não bateu o objetivo. Diferente
+    /// de <see cref="Skipped"/> genérico porque dispara uma retentativa automática (no executor
+    /// de tarefas agendadas) em vez de esperar a próxima ocorrência normal do cron.
+    /// </summary>
+    WaitingForXp = 4,
 }
