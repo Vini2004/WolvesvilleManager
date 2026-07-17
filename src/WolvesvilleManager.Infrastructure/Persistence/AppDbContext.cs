@@ -13,6 +13,7 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<TaskExecutionLog> TaskExecutionLogs => Set<TaskExecutionLog>();
     public DbSet<MemberXpSnapshot> MemberXpSnapshots => Set<MemberXpSnapshot>();
     public DbSet<QuestPollVote> QuestPollVotes => Set<QuestPollVote>();
+    public DbSet<QuestPollResult> QuestPollResults => Set<QuestPollResult>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -23,6 +24,16 @@ public class AppDbContext : DbContext, IAppDbContext
             e.HasOne(v => v.ClanRegistration)
                 .WithMany()
                 .HasForeignKey(v => v.ClanRegistrationId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<QuestPollResult>(e =>
+        {
+            e.HasIndex(r => new { r.ClanRegistrationId, r.DecidedAtUtc });
+            e.Property(r => r.QuestName).HasMaxLength(200);
+            e.HasOne(r => r.ClanRegistration)
+                .WithMany()
+                .HasForeignKey(r => r.ClanRegistrationId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

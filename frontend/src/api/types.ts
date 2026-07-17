@@ -123,13 +123,22 @@ export interface PollInfo {
   isClosed: boolean
 }
 
-/** Aba admin: link, apuração e prazo. */
+/** Uma rodada de votação já decidida (a automação já iniciou a missão ou embaralhou). */
+export interface PollHistoryEntry {
+  questName: string
+  votes: number
+  wasShuffle: boolean
+  decidedAtUtc: string
+}
+
+/** Aba admin: link, apuração, prazo e histórico de rodadas anteriores. */
 export interface PollAdmin {
   token: string
   quests: PollQuest[]
   totalVotes: number
   expiresAtUtc: string | null
   isClosed: boolean
+  history: PollHistoryEntry[]
 }
 
 /** Durações de prazo oferecidas na aba admin — mesmos valores do enum PollDuration do backend. */

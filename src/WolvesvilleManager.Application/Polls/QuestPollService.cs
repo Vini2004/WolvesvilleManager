@@ -14,8 +14,13 @@ public record PollDto(
     string ClanName, string? ClanTag, List<PollQuestDto> Quests, string? VotedQuestId,
     DateTime? ExpiresAtUtc, bool IsClosed);
 
-/// <summary>O que a aba admin vê: o link, a apuração e o prazo.</summary>
-public record PollAdminDto(string Token, List<PollQuestDto> Quests, int TotalVotes, DateTime? ExpiresAtUtc, bool IsClosed);
+/// <summary>Uma rodada de votação já decidida (a automação já claimou ou embaralhou).</summary>
+public record PollHistoryEntryDto(string QuestName, int Votes, bool WasShuffle, DateTime DecidedAtUtc);
+
+/// <summary>O que a aba admin vê: o link, a apuração, o prazo e o histórico de rodadas anteriores.</summary>
+public record PollAdminDto(
+    string Token, List<PollQuestDto> Quests, int TotalVotes, DateTime? ExpiresAtUtc, bool IsClosed,
+    List<PollHistoryEntryDto> History);
 
 /// <summary>Durações de prazo que a aba admin oferece — nunca "para sempre".</summary>
 public enum PollDuration { SixHours, TwelveHours, OneDay, ThreeDays, SevenDays }
@@ -53,7 +58,13 @@ public class QuestPollService
         var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
         var quests = await BuildQuestsAsync(reg.Id, apiKey, reg.ClanId, ct);
         var total = await _db.QuestPollVotes.CountAsync(v => v.ClanRegistrationId == reg.Id, ct);
-        return new PollAdminDto(reg.PollToken, quests, total, reg.PollExpiresAtUtc, IsClosed(reg));
+        var history = await _db.QuestPollResults
+            .Where(r => r.ClanRegistrationId == reg.Id)
+            .OrderByDescending(r => r.DecidedAtUtc)
+            .Take(20)
+            .Select(r => new PollHistoryEntryDto(r.QuestName, r.Votes, r.WasShuffle, r.DecidedAtUtc))
+            .ToListAsync(ct);
+        return new PollAdminDto(reg.PollToken, quests, total, reg.PollExpiresAtUtc, IsClosed(reg), history);
     }
 
     /// <summary>Aba admin: zera a urna do clã.</summary>

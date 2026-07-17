@@ -14,6 +14,7 @@ public interface IAppDbContext
     DbSet<TaskExecutionLog> TaskExecutionLogs { get; }
     DbSet<MemberXpSnapshot> MemberXpSnapshots { get; }
     DbSet<QuestPollVote> QuestPollVotes { get; }
+    DbSet<QuestPollResult> QuestPollResults { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

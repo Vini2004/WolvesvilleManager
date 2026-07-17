@@ -63,8 +63,8 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
           formulário com as missões disponíveis (mais a opção "🔀 Embaralhar missões", caso ninguém
           goste das atuais) e vota uma vez por navegador — sem login. Crie uma automação do tipo{' '}
           <span className="font-bold text-lav">Iniciar mais votada do formulário</span> para aplicar o
-          resultado no horário combinado: inicia a missão vencedora, ou embaralha se "Embaralhar" vencer;
-          a urna é zerada em ambos os casos.
+          resultado no horário combinado: inicia a missão vencedora, ou embaralha se "Embaralhar" vencer.
+          O resultado fica gravado no histórico abaixo antes da urna zerar para a próxima rodada.
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           <input readOnly value={link} onFocus={(e) => e.target.select()} className="input-dark flex-1 basis-64" />
@@ -144,6 +144,30 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
           )
         })}
       </div>
+
+      {poll.data.history.length > 0 && (
+        <>
+          <div className="mb-3.5 mt-9">
+            <SectionTitle>Histórico de rodadas</SectionTitle>
+          </div>
+          <div className="flex flex-col gap-2">
+            {poll.data.history.map((h, i) => (
+              <div key={i} className="list-card flex items-center justify-between gap-4 px-5 py-3.5">
+                <div className="min-w-0 font-sans text-[13.5px] font-semibold text-ink-2">
+                  {h.wasShuffle ? '🔀 ' : ''}
+                  {h.questName}
+                </div>
+                <div className="flex flex-none items-center gap-4">
+                  <div className="font-mono text-[12.5px] text-gold">
+                    {h.votes} voto{h.votes === 1 ? '' : 's'}
+                  </div>
+                  <div className="font-mono text-[12px] text-faint">{fmtDateTime(h.decidedAtUtc)}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }

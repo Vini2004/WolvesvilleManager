@@ -226,6 +226,16 @@ public class ScheduledTaskExecutor
                 $"Votos insuficientes: {context} tem {winner.Votes} voto(s), mínimo configurado é {task.MinVotes}.");
         }
 
+        // Grava o resultado antes de zerar — senão a decisão desta rodada se perderia junto com os votos.
+        _db.QuestPollResults.Add(new QuestPollResult
+        {
+            ClanRegistrationId = task.ClanRegistrationId,
+            QuestName = winner.Quest?.DisplayName ?? "Embaralhar missões",
+            Votes = winner.Votes,
+            WasShuffle = winner.Quest is null,
+        });
+        await _db.SaveChangesAsync(ct);
+
         // Urna limpa: a próxima rodada (de missões ou de embaralhar) começa do zero.
         await _db.QuestPollVotes
             .Where(v => v.ClanRegistrationId == task.ClanRegistrationId)
