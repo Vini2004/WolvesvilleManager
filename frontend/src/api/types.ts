@@ -42,11 +42,14 @@ export interface QuestParticipant {
 export interface ActiveQuest {
   quest: ClanQuest
   tier: number
+  /** XP acumulado desde o início da missão (todos os tiers) — para o tier atual, use `tierXp`. */
   xp: number
   tierStartTime: string | null
   tierEndTime: string | null
   tierFinished: boolean
   xpPerReward: number
+  /** XP acumulado só no tier atual (já descontando os tiers anteriores). */
+  tierXp: number
   claimedTime: boolean
   participants: QuestParticipant[]
 }
