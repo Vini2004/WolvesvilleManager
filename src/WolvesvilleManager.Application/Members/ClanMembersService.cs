@@ -100,16 +100,22 @@ public class ClanMembersService
     }
 
     /// <summary>
-    /// Ganho de XP por membro nos últimos <paramref name="days"/> dias, comparando o XP atual
-    /// com o snapshot diário mais antigo dentro da janela. Membros sem snapshot (entraram há
-    /// pouco ou histórico ainda curto) vêm com baseline nulo.
+    /// Ganho de XP por membro desde um início de janela, comparando o XP atual com o snapshot
+    /// diário mais antigo dentro dela. Membros sem snapshot (entraram há pouco ou histórico
+    /// ainda curto) vêm com baseline nulo.
     /// </summary>
-    public async Task<XpReport> GetXpReportAsync(int clanRegistrationId, int days, CancellationToken ct = default)
+    /// <param name="days">Usado só quando <paramref name="sinceUtc"/> não é informado (atalhos "Semanal"/"Mensal").</param>
+    /// <param name="sinceUtc">Data específica escolhida pelo admin — quando informada, ignora <paramref name="days"/>.</param>
+    public async Task<XpReport> GetXpReportAsync(
+        int clanRegistrationId, int days, DateTime? sinceUtc = null, CancellationToken ct = default)
     {
         var (reg, apiKey) = await _resolver.ResolveAsync(clanRegistrationId, ct);
         var members = await _api.GetMembersAsync(apiKey, reg.ClanId, ct);
 
-        var windowStart = DateTime.UtcNow.AddDays(-days);
+        var now = DateTime.UtcNow;
+        var windowStart = sinceUtc ?? now.AddDays(-days);
+        if (windowStart > now) windowStart = now; // data futura escolhida por engano — não faz sentido de janela.
+
         var snapshots = await _db.MemberXpSnapshots
             .Where(s => s.ClanRegistrationId == clanRegistrationId && s.TakenAtUtc >= windowStart)
             .ToListAsync(ct);
