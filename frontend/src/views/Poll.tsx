@@ -153,7 +153,7 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
       </div>
 
       <div className="card mb-7 px-7 py-[26px]">
-        <div className="mb-4 font-serif text-lg font-semibold text-ink">Prazo da votação</div>
+        <div className="mb-4 font-serif text-lg font-semibold uppercase text-ink">Prazo da votação</div>
 
         <div
           className={`mb-5 rounded-xl border-2 px-5 py-4 ${
