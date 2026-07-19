@@ -20,16 +20,18 @@ public class MembersController : ControllerBase
         _service.ListAsync(id, ct);
 
     /// <summary>
-    /// Ganho de XP dos membros. Sem "since", usa o atalho "days" (Semanal/Mensal); com "since"
-    /// (ex.: "2026-07-10"), mostra o ganho a partir dessa data específica, ignorando "days".
+    /// Ganho de XP dos membros entre "start" e "end" (datas, ex.: "2026-07-10"). Sem parâmetros,
+    /// usa os últimos 7 dias (hoje - 7 até hoje). O intervalo entre as duas datas não pode passar
+    /// de <see cref="ClanMembersService.MaxXpReportRangeDays"/> dias.
     /// </summary>
     [HttpGet("xp-report")]
     public Task<XpReport> XpReport(
-        int id, [FromQuery] int days = 7, [FromQuery] DateTime? since = null, CancellationToken ct = default) =>
-        _service.GetXpReportAsync(
-            id, Math.Clamp(days, 1, 90),
-            since is { } s ? DateTime.SpecifyKind(s.Date, DateTimeKind.Utc) : null,
-            ct);
+        int id, [FromQuery] DateTime? start = null, [FromQuery] DateTime? end = null, CancellationToken ct = default)
+    {
+        var endUtc = DateTime.SpecifyKind((end ?? DateTime.UtcNow).Date, DateTimeKind.Utc);
+        var startUtc = DateTime.SpecifyKind((start ?? endUtc.AddDays(-7)).Date, DateTimeKind.Utc);
+        return _service.GetXpReportAsync(id, startUtc, endUtc, ct);
+    }
 
     [HttpGet("blocklist")]
     public Task<List<BlocklistEntry>> Blocklist(int id, CancellationToken ct) =>
