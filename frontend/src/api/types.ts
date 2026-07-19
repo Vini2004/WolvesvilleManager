@@ -225,6 +225,7 @@ export interface XpReportEntry {
 
 export interface XpReport {
   sinceUtc: string | null
+  untilUtc: string | null
   entries: XpReportEntry[]
 }
 

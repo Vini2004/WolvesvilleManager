@@ -8,12 +8,19 @@ namespace WolvesvilleManager.Application.Members;
 /// <summary>Ganho de XP de um membro no período (baseline = snapshot mais antigo da janela).</summary>
 public record XpReportEntry(string PlayerId, string Username, long CurrentXp, long? BaselineXp, long? GainedXp);
 
-/// <summary>SinceUtc = data do snapshot usado como base; null quando ainda não há histórico.</summary>
-public record XpReport(DateTime? SinceUtc, List<XpReportEntry> Entries);
+/// <summary>
+/// SinceUtc/UntilUtc = datas dos snapshots realmente usados como início/fim (podem não bater
+/// exatamente com as datas escolhidas, já que o snapshot é diário); nulos quando ainda não há
+/// histórico suficiente na janela.
+/// </summary>
+public record XpReport(DateTime? SinceUtc, DateTime? UntilUtc, List<XpReportEntry> Entries);
 
 /// <summary>Casos de uso de membros de um clã registrado.</summary>
 public class ClanMembersService
 {
+    /// <summary>Maior intervalo entre data inicial e final aceito no relatório de XP.</summary>
+    public const int MaxXpReportRangeDays = 31;
+
     private readonly ClanKeyResolver _resolver;
     private readonly IWolvesvilleClient _api;
     private readonly IAppDbContext _db;
@@ -100,44 +107,54 @@ public class ClanMembersService
     }
 
     /// <summary>
-    /// Ganho de XP por membro desde um início de janela, comparando o XP atual com o snapshot
-    /// diário mais antigo dentro dela. Membros sem snapshot (entraram há pouco ou histórico
-    /// ainda curto) vêm com baseline nulo.
+    /// Ganho de XP por membro entre duas datas escolhidas pelo admin. O início usa o snapshot
+    /// diário mais antigo a partir de <paramref name="startUtc"/>; o fim usa o XP atual (ao
+    /// vivo) quando <paramref name="endUtc"/> cai em hoje ou depois, ou o snapshot mais recente
+    /// até lá quando é uma data passada. Membros sem snapshot no início da janela (entraram há
+    /// pouco ou histórico ainda curto) vêm com baseline nulo.
     /// </summary>
-    /// <param name="days">Usado só quando <paramref name="sinceUtc"/> não é informado (atalhos "Semanal"/"Mensal").</param>
-    /// <param name="sinceUtc">Data específica escolhida pelo admin — quando informada, ignora <paramref name="days"/>.</param>
     public async Task<XpReport> GetXpReportAsync(
-        int clanRegistrationId, int days, DateTime? sinceUtc = null, CancellationToken ct = default)
+        int clanRegistrationId, DateTime startUtc, DateTime endUtc, CancellationToken ct = default)
     {
+        if (startUtc > endUtc)
+            throw new BusinessRuleException("A data inicial não pode ser depois da data final.");
+        if ((endUtc - startUtc).TotalDays > MaxXpReportRangeDays)
+            throw new BusinessRuleException($"O período entre as datas não pode passar de {MaxXpReportRangeDays} dias.");
+
         var (reg, apiKey) = await _resolver.ResolveAsync(clanRegistrationId, ct);
         var members = await _api.GetMembersAsync(apiKey, reg.ClanId, ct);
 
         var now = DateTime.UtcNow;
-        var windowStart = sinceUtc ?? now.AddDays(-days);
-        if (windowStart > now) windowStart = now; // data futura escolhida por engano — não faz sentido de janela.
+        var effectiveEnd = endUtc > now ? now : endUtc;
+        var useLiveXpForEnd = endUtc.Date >= now.Date;
 
         var snapshots = await _db.MemberXpSnapshots
-            .Where(s => s.ClanRegistrationId == clanRegistrationId && s.TakenAtUtc >= windowStart)
+            .Where(s => s.ClanRegistrationId == clanRegistrationId && s.TakenAtUtc >= startUtc && s.TakenAtUtc <= effectiveEnd)
             .ToListAsync(ct);
 
-        // Baseline de cada membro: o snapshot mais antigo dentro da janela.
-        var baselines = snapshots
+        // Por membro: lista ordenada por data — o primeiro é o início da janela, o último é o fim.
+        var byPlayer = snapshots
             .GroupBy(s => s.PlayerId)
-            .ToDictionary(g => g.Key, g => g.OrderBy(s => s.TakenAtUtc).First());
+            .ToDictionary(g => g.Key, g => g.OrderBy(s => s.TakenAtUtc).ToList());
 
         var entries = members
             .Select(m =>
             {
-                var baseline = baselines.GetValueOrDefault(m.PlayerId);
+                var list = byPlayer.GetValueOrDefault(m.PlayerId);
+                long? startXp = list is { Count: > 0 } ? list[0].Xp : null;
+                long? endXp = useLiveXpForEnd ? m.Xp : (list is { Count: > 0 } ? list[^1].Xp : null);
                 return new XpReportEntry(
-                    m.PlayerId, m.Username, m.Xp,
-                    baseline?.Xp,
-                    baseline is null ? null : m.Xp - baseline.Xp);
+                    m.PlayerId, m.Username, m.Xp, startXp,
+                    startXp is null || endXp is null ? null : endXp - startXp);
             })
-            .OrderByDescending(e => e.GainedXp ?? -1)
+            .OrderByDescending(e => e.GainedXp ?? long.MinValue)
             .ToList();
 
-        var since = baselines.Count > 0 ? baselines.Values.Min(s => s.TakenAtUtc) : (DateTime?)null;
-        return new XpReport(since, entries);
+        DateTime? sinceUtc = byPlayer.Count > 0 ? byPlayer.Values.Min(l => l[0].TakenAtUtc) : null;
+        DateTime? untilUtc = useLiveXpForEnd
+            ? now
+            : (byPlayer.Count > 0 ? byPlayer.Values.Max(l => l[^1].TakenAtUtc) : null);
+
+        return new XpReport(sinceUtc, untilUtc, entries);
     }
 }

@@ -4,59 +4,62 @@ import { Avatar, ErrorBox, Loading, SectionTitle, Toggle } from '../components/u
 import { useAsync } from '../lib/useAsync'
 import { fmtDate, fmtNumber } from '../lib/format'
 
+const XP_REPORT_MAX_RANGE_DAYS = 31
+const DAY_MS = 86_400_000
+
+function toDateStr(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10)
+}
+
+function dateStrToMs(d: string): number {
+  return new Date(`${d}T00:00:00Z`).getTime()
+}
+
 function XpReportSection({ clanRegId }: { clanRegId: number }) {
-  const [days, setDays] = useState(7)
-  const [customDate, setCustomDate] = useState('') // 'YYYY-MM-DD'; vazio = usa os atalhos Semanal/Mensal
-  const report = useAsync(
-    () => api.getXpReport(clanRegId, days, customDate || undefined),
-    [clanRegId, days, customDate],
-  )
-  const today = new Date().toISOString().slice(0, 10)
+  const today = toDateStr(Date.now())
+  const [startDate, setStartDate] = useState(toDateStr(Date.now() - 7 * DAY_MS))
+  const [endDate, setEndDate] = useState(today)
+  const report = useAsync(() => api.getXpReport(clanRegId, startDate, endDate), [clanRegId, startDate, endDate])
+
+  // Editar uma ponta nunca move a outra — só limita o valor digitado a ficar dentro de
+  // XP_REPORT_MAX_RANGE_DAYS e na ordem certa (início ≤ fim), pra não surpreender quem tá filtrando.
+  const onChangeStart = (value: string) => {
+    const minAllowed = dateStrToMs(endDate) - XP_REPORT_MAX_RANGE_DAYS * DAY_MS
+    const clamped = Math.min(Math.max(dateStrToMs(value), minAllowed), dateStrToMs(endDate))
+    setStartDate(toDateStr(clamped))
+  }
+  const onChangeEnd = (value: string) => {
+    const maxAllowed = dateStrToMs(startDate) + XP_REPORT_MAX_RANGE_DAYS * DAY_MS
+    const clamped = Math.max(Math.min(dateStrToMs(value), maxAllowed), dateStrToMs(startDate))
+    setEndDate(toDateStr(Math.min(clamped, dateStrToMs(today))))
+  }
 
   return (
     <div className="mt-7">
       <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2.5">
         <SectionTitle>Relatório de XP</SectionTitle>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {(
-            [
-              [7, 'Semanal'],
-              [30, 'Mensal'],
-            ] as [number, string][]
-          ).map(([d, label]) => (
-            <button
-              key={d}
-              onClick={() => {
-                setDays(d)
-                setCustomDate('')
-              }}
-              className={`cursor-pointer rounded-[20px] border px-3 py-1 font-sans text-[11.5px] font-semibold ${
-                !customDate && days === d
-                  ? 'border-violet/50 bg-violet/15 text-ink'
-                  : 'border-[rgba(180,150,220,0.22)] bg-transparent text-muted hover:text-lav'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-          <input
-            type="date"
-            value={customDate}
-            max={today}
-            onChange={(e) => setCustomDate(e.target.value)}
-            title="Ver ganho de XP a partir de uma data específica"
-            className={`input-dark w-auto cursor-pointer rounded-[20px] px-3 py-1 font-sans text-[11.5px] ${
-              customDate ? 'border-violet/50 bg-violet/15 text-ink' : ''
-            }`}
-          />
-          {customDate && (
-            <button
-              onClick={() => setCustomDate('')}
-              className="cursor-pointer border-none bg-transparent px-1 font-sans text-[11.5px] font-semibold text-muted hover:text-lav"
-            >
-              Limpar
-            </button>
-          )}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <span className="font-sans text-[11.5px] text-faint">De</span>
+            <input
+              type="date"
+              value={startDate}
+              max={endDate}
+              onChange={(e) => onChangeStart(e.target.value)}
+              className="input-dark w-auto cursor-pointer px-3 py-1 font-sans text-[11.5px]"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="font-sans text-[11.5px] text-faint">até</span>
+            <input
+              type="date"
+              value={endDate}
+              min={startDate}
+              max={today}
+              onChange={(e) => onChangeEnd(e.target.value)}
+              className="input-dark w-auto cursor-pointer px-3 py-1 font-sans text-[11.5px]"
+            />
+          </div>
         </div>
       </div>
       {report.loading ? (
@@ -65,13 +68,13 @@ function XpReportSection({ clanRegId }: { clanRegId: number }) {
         <ErrorBox message={report.error} onRetry={report.reload} />
       ) : report.data!.sinceUtc == null ? (
         <div className="list-card px-5 py-5 font-sans text-[13px] text-muted">
-          Ainda não há histórico suficiente — o sistema tira uma foto diária do XP e o relatório
-          passa a valer a partir de amanhã.
+          Ainda não há histórico suficiente nesse período — o sistema tira uma foto diária do XP,
+          então pode levar até 24h para o relatório valer para uma janela recém-escolhida.
         </div>
       ) : (
         <div className="list-card">
           <div className="border-b border-[rgba(180,150,220,0.1)] px-5 py-3 font-sans text-[11.5px] text-faint">
-            Ganho de XP de {fmtDate(report.data!.sinceUtc)} até {fmtDate(new Date().toISOString())}
+            Ganho de XP de {fmtDate(report.data!.sinceUtc)} até {fmtDate(report.data!.untilUtc)}
           </div>
           {report.data!.entries.map((e) => (
             <div
