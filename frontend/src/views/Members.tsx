@@ -6,13 +6,18 @@ import { fmtDate, fmtNumber } from '../lib/format'
 
 function XpReportSection({ clanRegId }: { clanRegId: number }) {
   const [days, setDays] = useState(7)
-  const report = useAsync(() => api.getXpReport(clanRegId, days), [clanRegId, days])
+  const [customDate, setCustomDate] = useState('') // 'YYYY-MM-DD'; vazio = usa os atalhos Semanal/Mensal
+  const report = useAsync(
+    () => api.getXpReport(clanRegId, days, customDate || undefined),
+    [clanRegId, days, customDate],
+  )
+  const today = new Date().toISOString().slice(0, 10)
 
   return (
     <div className="mt-7">
-      <div className="mb-3.5 flex items-center justify-between">
+      <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2.5">
         <SectionTitle>Relatório de XP</SectionTitle>
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {(
             [
               [7, 'Semanal'],
@@ -21,9 +26,12 @@ function XpReportSection({ clanRegId }: { clanRegId: number }) {
           ).map(([d, label]) => (
             <button
               key={d}
-              onClick={() => setDays(d)}
+              onClick={() => {
+                setDays(d)
+                setCustomDate('')
+              }}
               className={`cursor-pointer rounded-[20px] border px-3 py-1 font-sans text-[11.5px] font-semibold ${
-                days === d
+                !customDate && days === d
                   ? 'border-violet/50 bg-violet/15 text-ink'
                   : 'border-[rgba(180,150,220,0.22)] bg-transparent text-muted hover:text-lav'
               }`}
@@ -31,6 +39,24 @@ function XpReportSection({ clanRegId }: { clanRegId: number }) {
               {label}
             </button>
           ))}
+          <input
+            type="date"
+            value={customDate}
+            max={today}
+            onChange={(e) => setCustomDate(e.target.value)}
+            title="Ver ganho de XP a partir de uma data específica"
+            className={`input-dark w-auto cursor-pointer rounded-[20px] px-3 py-1 font-sans text-[11.5px] ${
+              customDate ? 'border-violet/50 bg-violet/15 text-ink' : ''
+            }`}
+          />
+          {customDate && (
+            <button
+              onClick={() => setCustomDate('')}
+              className="cursor-pointer border-none bg-transparent px-1 font-sans text-[11.5px] font-semibold text-muted hover:text-lav"
+            >
+              Limpar
+            </button>
+          )}
         </div>
       </div>
       {report.loading ? (

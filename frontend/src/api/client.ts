@@ -121,8 +121,12 @@ export const api = {
 
   // ---------- Membros ----------
   listMembers: (clanId: number) => request<ClanMember[]>(`/api/clans/${clanId}/members`),
-  getXpReport: (clanId: number, days: number) =>
-    request<XpReport>(`/api/clans/${clanId}/members/xp-report?days=${days}`),
+  getXpReport: (clanId: number, days: number, since?: string) =>
+    request<XpReport>(
+      since
+        ? `/api/clans/${clanId}/members/xp-report?since=${since}`
+        : `/api/clans/${clanId}/members/xp-report?days=${days}`,
+    ),
   setFlair: (clanId: number, playerId: string, flair: string) =>
     request<void>(`/api/clans/${clanId}/members/${playerId}/flair`, {
       method: 'PUT',
