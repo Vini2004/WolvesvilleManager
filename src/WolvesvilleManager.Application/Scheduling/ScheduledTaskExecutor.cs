@@ -19,10 +19,15 @@ namespace WolvesvilleManager.Application.Scheduling;
 /// </summary>
 public class ScheduledTaskExecutor
 {
-    /// <summary>Quantas retentativas automáticas de 30 em 30 min são feitas no mesmo dia quando o XP do tier ainda não bateu.</summary>
-    private const int MaxAutoRetries = 4;
+    /// <summary>
+    /// Quantas retentativas automáticas são feitas no mesmo dia quando o XP do tier ainda não
+    /// bateu. Público porque o gatilho externo (cron-job.org) — que não sabe nada sobre
+    /// <see cref="ScheduledTask.NextRunAtUtc"/> — precisa saber quantos pings a mais criar para
+    /// que essas retentativas de fato cheguem a rodar em produção (sem Always On).
+    /// </summary>
+    public const int MaxAutoRetries = 4;
 
-    private static readonly TimeSpan AutoRetryInterval = TimeSpan.FromMinutes(30);
+    public static readonly TimeSpan AutoRetryInterval = TimeSpan.FromMinutes(30);
 
     private readonly IAppDbContext _db;
     private readonly IWolvesvilleClient _api;

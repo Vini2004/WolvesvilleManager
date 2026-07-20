@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using WolvesvilleManager.Application.Scheduling;
+using WolvesvilleManager.Domain.Entities;
 
 namespace WolvesvilleManager.Infrastructure.Scheduling;
 
@@ -34,9 +35,20 @@ public sealed class CronJobOrgGateway : ICronTriggerGateway
 
     public async Task<CronTriggerIds> SyncAsync(CronTriggerIds existing, ScheduledTaskTrigger t, CancellationToken ct = default)
     {
+        // "Pular tempo de espera" com retentativa automática ligada: o gatilho de execução
+        // precisa disparar de novo a cada retentativa (30 em 30 min, algumas vezes) — o
+        // cron-job.org não enxerga o reagendamento interno de "próxima execução", só o próprio
+        // horário configurado. Sem isso, a retentativa nunca chega a rodar em produção (sem
+        // Always On). Cron "avançado" (fora do formato simples) cai pro schedule normal.
+        var runSchedule = t.Type == ScheduledTaskType.SkipQuestWaitingTime && t.AutoRetryOnXpNotReached
+            ? CronJobOrgTranslator.TryScheduleWithRetries(
+                t.CronExpression, (int)ScheduledTaskExecutor.AutoRetryInterval.TotalMinutes, ScheduledTaskExecutor.MaxAutoRetries)
+              ?? CronJobOrgTranslator.ToSchedule(t.CronExpression)
+            : CronJobOrgTranslator.ToSchedule(t.CronExpression);
+
         var runId = await UpsertJobAsync(
             existing.RunJobId, $"WVM #{t.TaskId} {t.Type}",
-            CronJobOrgTranslator.ToSchedule(t.CronExpression), t.TimeZoneId, t.Enabled, ct);
+            runSchedule, t.TimeZoneId, t.Enabled, ct);
 
         int? warmupId = existing.WarmupJobId;
         var warmupCron = t.Enabled ? CronJobOrgTranslator.TryWarmupCron(t.CronExpression) : null;

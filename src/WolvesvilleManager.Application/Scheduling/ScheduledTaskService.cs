@@ -120,7 +120,10 @@ public class ScheduledTaskService
         {
             var ids = await _cron.SyncAsync(
                 new CronTriggerIds(task.ExternalRunJobId, task.ExternalWarmupJobId),
-                new ScheduledTaskTrigger(task.Id, task.Type, task.CronExpression, task.TimeZoneId, task.Enabled), ct);
+                new ScheduledTaskTrigger(
+                    task.Id, task.Type, task.CronExpression, task.TimeZoneId, task.Enabled,
+                    task.AutoRetryOnXpNotReached),
+                ct);
             task.ExternalRunJobId = ids.RunJobId;
             task.ExternalWarmupJobId = ids.WarmupJobId;
             return true;
