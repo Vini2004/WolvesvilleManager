@@ -82,4 +82,47 @@ public class CronJobOrgTranslatorTests
         // Lista com token não numérico (range) não é suportada.
         Assert.Null(CronJobOrgTranslator.TryWarmupCron("0 18-22 * * *"));
     }
+
+    [Fact]
+    public void ScheduleWithRetries_ExpandsToCoverEveryRetryPing()
+    {
+        // "Pular tempo de espera" às 18h com retentativa de 30 em 30 min, 4 vezes: precisa disparar
+        // de novo (externamente) em 18:30, 19:00, 19:30 e 20:00, além do horário original.
+        var s = CronJobOrgTranslator.TryScheduleWithRetries("0 18 * * MON,TUE,WED,THU,FRI", 30, 4);
+
+        Assert.NotNull(s);
+        Assert.Equal(new[] { 0, 30 }, s!.Minutes);
+        Assert.Equal(new[] { 18, 19, 20 }, s.Hours);
+        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, s.Wdays);
+        Assert.Equal(new[] { -1 }, s.Mdays);
+        Assert.Equal(new[] { -1 }, s.Months);
+    }
+
+    [Fact]
+    public void ScheduleWithRetries_NonZeroBaseMinute()
+    {
+        var s = CronJobOrgTranslator.TryScheduleWithRetries("15 18 * * MON", 30, 4);
+
+        Assert.NotNull(s);
+        Assert.Equal(new[] { 15, 45 }, s!.Minutes);
+        Assert.Equal(new[] { 18, 19, 20 }, s.Hours);
+    }
+
+    [Fact]
+    public void ScheduleWithRetries_StopsExpandingBeforeCrossingMidnight()
+    {
+        // Às 23h, a 2ª retentativa (+60min) viraria o dia seguinte — não expande além da 1ª.
+        var s = CronJobOrgTranslator.TryScheduleWithRetries("0 23 * * MON", 30, 4);
+
+        Assert.NotNull(s);
+        Assert.Equal(new[] { 0, 30 }, s!.Minutes);
+        Assert.Equal(new[] { 23 }, s.Hours);
+    }
+
+    [Fact]
+    public void ScheduleWithRetries_NullForAdvancedCronWithoutSingleMinuteAndHour()
+    {
+        Assert.Null(CronJobOrgTranslator.TryScheduleWithRetries("*/15 14 * * *", 30, 4));
+        Assert.Null(CronJobOrgTranslator.TryScheduleWithRetries("0 18,20 * * MON", 30, 4));
+    }
 }

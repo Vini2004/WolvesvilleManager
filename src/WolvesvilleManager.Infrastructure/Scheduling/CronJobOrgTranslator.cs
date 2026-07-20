@@ -29,6 +29,39 @@ public static class CronJobOrgTranslator
     }
 
     /// <summary>
+    /// Igual a <see cref="ToSchedule"/>, mas expande a agenda de execução para incluir pings
+    /// extras a cada <paramref name="retryIntervalMinutes"/> minutos, <paramref name="retryCount"/>
+    /// vezes depois do horário original — necessário porque o gatilho externo (cron-job.org) só
+    /// sabe disparar em horários fixos; ele não enxerga o reagendamento interno de "próxima
+    /// execução" que a retentativa automática do "pular tempo de espera" faz. Cada ping a mais é
+    /// barato: se a tarefa não estiver realmente vencida (porque já deu certo antes, ou a
+    /// retentativa foi desligada), o executor simplesmente não acha nada a fazer. Só cobre o
+    /// formato simples (minuto e hora únicos) que a UI sempre gera — cron "avançado" com
+    /// listas/passos devolve null e cai para <see cref="ToSchedule"/> sem expandir.
+    /// </summary>
+    public static CronJobOrgSchedule? TryScheduleWithRetries(string cron, int retryIntervalMinutes, int retryCount)
+    {
+        var f = cron.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (f.Length != 5) return null;
+        if (!int.TryParse(f[0], out var baseMinute) || !int.TryParse(f[1], out var baseHour)) return null;
+
+        var minutes = new SortedSet<int> { baseMinute };
+        var hours = new SortedSet<int> { baseHour };
+        for (var i = 1; i <= retryCount; i++)
+        {
+            var total = baseHour * 60 + baseMinute + i * retryIntervalMinutes;
+            var hour = total / 60;
+            if (hour > 23) break; // viraria o dia seguinte (e o dia-da-semana junto) — não expande além disso
+            minutes.Add(total % 60);
+            hours.Add(hour);
+        }
+
+        return new CronJobOrgSchedule(
+            minutes.ToArray(), hours.ToArray(),
+            ParseField(f[2], 1, 31), ParseField(f[3], 1, 12), ParseDow(f[4]));
+    }
+
+    /// <summary>
     /// Cron ~<paramref name="leadMinutes"/> min antes, para pré-aquecer o app/banco. Trata minuto
     /// único com hora única OU lista de horas ("0 18,20,22 * * MON-FRI" → "55 17,19,21 …", usado
     /// pelos horários de retentativa do pular-espera); fora disso devolve null e o gatilho de
