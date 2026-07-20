@@ -63,10 +63,11 @@ public class ScheduledTaskExecutor
             TaskExecutionOutcome outcome;
             string message;
             DateTime? nextRunOverrideUtc = null;
+            var dueAtUtc = task.NextRunAtUtc!.Value;
             try
             {
                 var apiKey = _protector.Unprotect(task.ClanRegistration.ProtectedApiKey, task.ClanRegistrationId);
-                (outcome, message, nextRunOverrideUtc) = await ExecuteAsync(task, apiKey, ct);
+                (outcome, message, nextRunOverrideUtc) = await ExecuteAsync(task, apiKey, dueAtUtc, ct);
             }
             catch (Exception ex) when (ex is WolvesvilleApiException or HttpRequestException or ApiKeyUnprotectException)
             {
@@ -222,7 +223,7 @@ public class ScheduledTaskExecutor
         DateTimeOffset.TryParse(raw, out var parsed) ? parsed.UtcDateTime : null;
 
     private async Task<(TaskExecutionOutcome Outcome, string Message, DateTime? NextRunOverrideUtc)> ExecuteAsync(
-        ScheduledTask task, string apiKey, CancellationToken ct)
+        ScheduledTask task, string apiKey, DateTime dueAtUtc, CancellationToken ct)
     {
         var clanId = task.ClanRegistration.ClanId;
         return task.Type switch
@@ -230,7 +231,7 @@ public class ScheduledTaskExecutor
             ScheduledTaskType.ClaimMostVotedQuest => NoOverride(await ClaimMostVotedQuestAsync(task, apiKey, clanId, ct)),
             ScheduledTaskType.ClaimMostVotedFormQuest => NoOverride(await ClaimMostVotedFormQuestAsync(task, apiKey, clanId, ct)),
             ScheduledTaskType.ClaimSpecificQuest => NoOverride(await ClaimSpecificQuestAsync(task, apiKey, clanId, ct)),
-            ScheduledTaskType.SkipQuestWaitingTime => await SkipWaitingTimeAsync(task, apiKey, clanId, ct),
+            ScheduledTaskType.SkipQuestWaitingTime => await SkipWaitingTimeAsync(task, apiKey, clanId, dueAtUtc, ct),
             ScheduledTaskType.ClaimQuestExtraTime => NoOverride(await ClaimExtraTimeAsync(apiKey, clanId, ct)),
             _ => (TaskExecutionOutcome.Failed, $"Tipo de tarefa desconhecido: {task.Type}.", null),
         };
@@ -427,7 +428,7 @@ public class ScheduledTaskExecutor
     }
 
     private async Task<(TaskExecutionOutcome, string, DateTime?)> SkipWaitingTimeAsync(
-        ScheduledTask task, string apiKey, string clanId, CancellationToken ct)
+        ScheduledTask task, string apiKey, string clanId, DateTime dueAtUtc, CancellationToken ct)
     {
         // No máximo UM pulo por dia (no fuso da tarefa) — sem isso, uma retentativa automática
         // depois do pulo já ter dado certo arriscaria pular a espera do tier SEGUINTE, que o
@@ -463,7 +464,11 @@ public class ScheduledTaskExecutor
 
             if (retriesSoFar <= MaxAutoRetries)
             {
-                var retryAtUtc = DateTime.UtcNow.Add(AutoRetryInterval);
+                // Ancorado no horário AGENDADO desta execução (não em "agora") para a grade de
+                // retentativas ficar sempre exata — 18:00 → 18:30 → 19:00 → 19:30 → 20:00 — igual
+                // à agenda expandida no gatilho externo (cron-job.org), mesmo que a execução real
+                // atrase alguns segundos/minutos por causa do delay do agendador externo.
+                var retryAtUtc = dueAtUtc.Add(AutoRetryInterval);
                 var retryAtLocal = TimeZoneInfo.ConvertTimeFromUtc(retryAtUtc, tz);
                 return (TaskExecutionOutcome.WaitingForXp,
                     $"O XP do tier ainda não bateu o objetivo — nada a pular agora. Tenta de novo automaticamente " +

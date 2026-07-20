@@ -218,6 +218,37 @@ public class ScheduledTaskExecutorTests
     }
 
     [Fact]
+    public async Task SkipWaitingTime_RetentativaAncoradaNoHorarioAgendado_NaoNoMomentoDaExecucao()
+    {
+        using var db = CreateDb();
+        var task = SeedDueTask(db, ScheduledTaskType.SkipQuestWaitingTime);
+        // Simula o gatilho externo atrasando 20 min para efetivamente rodar (ex.: fila do
+        // cron-job.org) — a retentativa deve ser calculada a partir do horário AGENDADO
+        // (NextRunAtUtc), não do instante em que o código de fato executou.
+        var scheduledForUtc = DateTime.UtcNow.AddMinutes(-20);
+        task.NextRunAtUtc = scheduledForUtc;
+        db.SaveChanges();
+
+        var api = new FakeWolvesvilleClient
+        {
+            ActiveQuest = new ActiveQuest
+            {
+                Quest = Quest("quest-a"),
+                TierStartTime = DateTimeOffset.UtcNow.AddHours(-1).ToString("O"),
+                Xp = 100,
+                XpPerReward = 9500,
+            },
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        // Agendado + 30min = ~10 min a partir de agora — bem diferente de "agora + 30min"
+        // (~30 min a partir de agora), que era o comportamento do bug antigo.
+        var expected = scheduledForUtc.AddMinutes(30);
+        Assert.InRange(task.NextRunAtUtc!.Value, expected.AddMinutes(-1), expected.AddMinutes(1));
+    }
+
+    [Fact]
     public async Task SkipWaitingTime_RetentativaDesligada_NaoReagendaEm30Min()
     {
         using var db = CreateDb();
