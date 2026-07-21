@@ -277,12 +277,12 @@ public class ScheduledTaskExecutorTests
     }
 
     [Fact]
-    public async Task SkipWaitingTime_XpNaoBateApos4Retentativas_DesisteEVoltaAoCronNormal()
+    public async Task SkipWaitingTime_XpNaoBateAposMaxRetentativas_DesisteEVoltaAoCronNormal()
     {
         using var db = CreateDb();
         var task = SeedDueTask(db, ScheduledTaskType.SkipQuestWaitingTime); // cron "*/5 * * * *"
-        // 4 retentativas automáticas já registradas hoje (o máximo permitido).
-        for (var i = 1; i <= 4; i++)
+        // Retentativas automáticas já registradas hoje até o máximo permitido.
+        for (var i = 1; i <= ScheduledTaskExecutor.MaxAutoRetries; i++)
         {
             db.TaskExecutionLogs.Add(new TaskExecutionLog
             {
