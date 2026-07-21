@@ -189,7 +189,7 @@ export interface ScheduledTask {
   targetQuestId: string | null
   targetQuestName: string | null
   targetQuestPromoImageUrl: string | null
-  /** Só vale para 'SkipQuestWaitingTime': tenta de novo a cada 30min (até 4x) se o XP do tier não bateu. */
+  /** Só vale para 'SkipQuestWaitingTime': tenta de novo a cada 30min (até 10x) se o XP do tier não bateu. */
   autoRetryOnXpNotReached: boolean
   nextRunAtUtc: string | null
   lastRunAtUtc: string | null

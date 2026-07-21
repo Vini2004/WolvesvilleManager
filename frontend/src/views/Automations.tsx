@@ -515,7 +515,7 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
               </div>
               <div className="mt-1.5 font-sans text-[11.5px] text-dim">
                 {modal.form.autoRetryOnXpNotReached
-                  ? 'Se o XP do tier ainda não bateu no horário configurado, tenta de novo sozinha a cada 30 min, até 4 vezes.'
+                  ? 'Se o XP do tier ainda não bateu no horário configurado, tenta de novo sozinha a cada 30 min, até 10 vezes.'
                   : 'Se o XP do tier ainda não bateu no horário configurado, não tenta de novo sozinha — só no próximo horário normal desta automação.'}
               </div>
             </>

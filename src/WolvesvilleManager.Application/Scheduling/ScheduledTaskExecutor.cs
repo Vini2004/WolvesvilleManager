@@ -25,7 +25,7 @@ public class ScheduledTaskExecutor
     /// <see cref="ScheduledTask.NextRunAtUtc"/> — precisa saber quantos pings a mais criar para
     /// que essas retentativas de fato cheguem a rodar em produção (sem Always On).
     /// </summary>
-    public const int MaxAutoRetries = 4;
+    public const int MaxAutoRetries = 10;
 
     public static readonly TimeSpan AutoRetryInterval = TimeSpan.FromMinutes(30);
 
