@@ -281,13 +281,16 @@ public class ScheduledTaskExecutorTests
     {
         using var db = CreateDb();
         var task = SeedDueTask(db, ScheduledTaskType.SkipQuestWaitingTime); // cron "*/5 * * * *"
-        // Retentativas automáticas já registradas hoje até o máximo permitido.
+        // Retentativas automáticas já registradas hoje até o máximo permitido. Offsets em
+        // segundos (não minutos) — com o limite alto de retentativas, espalhar em minutos
+        // arriscaria cruzar a virada do dia UTC (o corte de "hoje" do código de produção) e
+        // fazer algumas ficarem de fora da contagem, mascarando o cenário testado.
         for (var i = 1; i <= ScheduledTaskExecutor.MaxAutoRetries; i++)
         {
             db.TaskExecutionLogs.Add(new TaskExecutionLog
             {
                 ScheduledTaskId = task.Id,
-                RanAtUtc = DateTime.UtcNow.AddMinutes(-10 * i),
+                RanAtUtc = DateTime.UtcNow.AddSeconds(-i),
                 Outcome = TaskExecutionOutcome.WaitingForXp,
             });
         }
