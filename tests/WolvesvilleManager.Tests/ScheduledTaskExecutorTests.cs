@@ -249,6 +249,46 @@ public class ScheduledTaskExecutorTests
     }
 
     [Fact]
+    public async Task SkipWaitingTime_RespeitaLimiteDeRetentativasConfiguradoPelaAutomacao()
+    {
+        using var db = CreateDb();
+        var task = SeedDueTask(db, ScheduledTaskType.SkipQuestWaitingTime); // cron "*/5 * * * *"
+        // Automação configurada com limite BEM menor que o padrão (10) — só 3 retentativas.
+        task.AutoRetryMaxAttempts = 3;
+        // Já rodaram 3 retentativas hoje: para esta automação, já é o limite configurado dela.
+        for (var i = 1; i <= 3; i++)
+        {
+            db.TaskExecutionLogs.Add(new TaskExecutionLog
+            {
+                ScheduledTaskId = task.Id,
+                RanAtUtc = DateTime.UtcNow.AddSeconds(-i),
+                Outcome = TaskExecutionOutcome.WaitingForXp,
+            });
+        }
+        db.SaveChanges();
+
+        var api = new FakeWolvesvilleClient
+        {
+            ActiveQuest = new ActiveQuest
+            {
+                Quest = Quest("quest-a"),
+                TierStartTime = DateTimeOffset.UtcNow.AddHours(-1).ToString("O"),
+                Xp = 100,
+                XpPerReward = 9500,
+            },
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        var log = db.TaskExecutionLogs.OrderByDescending(l => l.Id).First();
+        Assert.Equal(TaskExecutionOutcome.WaitingForXp, log.Outcome);
+        Assert.Contains("3 retentativas", log.Message);
+        // Já bateu o limite CONFIGURADO (3), mesmo estando bem abaixo do máximo permitido pelo
+        // sistema (100) — desiste do reagendamento em 30min e volta para o cron normal (~5 min).
+        Assert.InRange(task.NextRunAtUtc!.Value, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(6));
+    }
+
+    [Fact]
     public async Task SkipWaitingTime_RetentativaDesligada_NaoReagendaEm30Min()
     {
         using var db = CreateDb();
@@ -281,11 +321,12 @@ public class ScheduledTaskExecutorTests
     {
         using var db = CreateDb();
         var task = SeedDueTask(db, ScheduledTaskType.SkipQuestWaitingTime); // cron "*/5 * * * *"
-        // Retentativas automáticas já registradas hoje até o máximo permitido. Offsets em
-        // segundos (não minutos) — com o limite alto de retentativas, espalhar em minutos
-        // arriscaria cruzar a virada do dia UTC (o corte de "hoje" do código de produção) e
-        // fazer algumas ficarem de fora da contagem, mascarando o cenário testado.
-        for (var i = 1; i <= ScheduledTaskExecutor.MaxAutoRetries; i++)
+        // Retentativas automáticas já registradas hoje até o máximo configurado nesta automação
+        // (padrão de 10). Offsets em segundos (não minutos) — com um limite configurável alto
+        // (até 100), espalhar em minutos arriscaria cruzar a virada do dia UTC (o corte de "hoje"
+        // do código de produção) e fazer algumas ficarem de fora da contagem, mascarando o
+        // cenário testado.
+        for (var i = 1; i <= task.AutoRetryMaxAttempts; i++)
         {
             db.TaskExecutionLogs.Add(new TaskExecutionLog
             {
@@ -311,8 +352,8 @@ public class ScheduledTaskExecutorTests
 
         var log = db.TaskExecutionLogs.OrderByDescending(l => l.Id).First();
         Assert.Equal(TaskExecutionOutcome.WaitingForXp, log.Outcome);
-        // Já eram 4 retentativas hoje: desiste do reagendamento em 30min e volta para a próxima
-        // ocorrência normal do cron (a cada 5 min), não outros 30min à frente.
+        // Já eram todas as retentativas permitidas hoje: desiste do reagendamento em 30min e
+        // volta para a próxima ocorrência normal do cron (a cada 5 min), não outros 30min à frente.
         Assert.InRange(task.NextRunAtUtc!.Value, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(6));
     }
 

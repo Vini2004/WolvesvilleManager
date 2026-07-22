@@ -19,7 +19,10 @@ interface FormState {
   targetQuestPromoImageUrl: string
   enabled: boolean
   autoRetryOnXpNotReached: boolean
+  autoRetryMaxAttempts: number
 }
+
+const AUTO_RETRY_MAX_ATTEMPTS_LIMIT = 100
 
 const DEFAULT_FORM: FormState = {
   type: 'ClaimMostVotedQuest',
@@ -32,6 +35,7 @@ const DEFAULT_FORM: FormState = {
   targetQuestPromoImageUrl: '',
   enabled: true,
   autoRetryOnXpNotReached: true,
+  autoRetryMaxAttempts: 10,
 }
 
 function formFromTask(t: ScheduledTask): FormState {
@@ -47,6 +51,7 @@ function formFromTask(t: ScheduledTask): FormState {
     targetQuestPromoImageUrl: t.targetQuestPromoImageUrl ?? '',
     enabled: t.enabled,
     autoRetryOnXpNotReached: t.autoRetryOnXpNotReached,
+    autoRetryMaxAttempts: t.autoRetryMaxAttempts,
   }
 }
 
@@ -63,6 +68,7 @@ function toRequest(f: FormState): CreateScheduledTaskRequest {
     targetQuestPromoImageUrl: specific ? f.targetQuestPromoImageUrl || null : null,
     enabled: f.enabled,
     autoRetryOnXpNotReached: f.autoRetryOnXpNotReached,
+    autoRetryMaxAttempts: f.autoRetryMaxAttempts,
   }
 }
 
@@ -175,6 +181,7 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                       targetQuestPromoImageUrl: t.targetQuestPromoImageUrl,
                       enabled: !t.enabled,
                       autoRetryOnXpNotReached: t.autoRetryOnXpNotReached,
+                      autoRetryMaxAttempts: t.autoRetryMaxAttempts,
                     }),
                   )
                 }
@@ -189,8 +196,10 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
                     ? ` · mín. ${t.minVotes} votos`
                     : ''}
                   {t.type === 'ClaimSpecificQuest' ? ` · ${t.targetQuestName || 'missão fixada'}` : ''}
-                  {t.type === 'SkipQuestWaitingTime' && !t.autoRetryOnXpNotReached
-                    ? ' · retentativa automática desligada'
+                  {t.type === 'SkipQuestWaitingTime'
+                    ? t.autoRetryOnXpNotReached
+                      ? ` · retentativa automática: até ${t.autoRetryMaxAttempts}x`
+                      : ' · retentativa automática desligada'
                     : ''}
                 </div>
               </div>
@@ -515,9 +524,39 @@ export function Automations({ clanRegId }: { clanRegId: number }) {
               </div>
               <div className="mt-1.5 font-sans text-[11.5px] text-dim">
                 {modal.form.autoRetryOnXpNotReached
-                  ? 'Se o XP do tier ainda não bateu no horário configurado, tenta de novo sozinha a cada 30 min, até 10 vezes.'
+                  ? 'Se o XP do tier ainda não bateu no horário configurado, tenta de novo sozinha a cada 30 min, até a quantidade de vezes definida abaixo.'
                   : 'Se o XP do tier ainda não bateu no horário configurado, não tenta de novo sozinha — só no próximo horário normal desta automação.'}
               </div>
+
+              {modal.form.autoRetryOnXpNotReached && (
+                <>
+                  <div className="field-label mb-1.5 mt-[14px]">Quantidade de retentativas</div>
+                  <input
+                    type="number"
+                    min={1}
+                    max={AUTO_RETRY_MAX_ATTEMPTS_LIMIT}
+                    value={modal.form.autoRetryMaxAttempts}
+                    onChange={(e) =>
+                      setModal({
+                        ...modal,
+                        form: {
+                          ...modal.form,
+                          autoRetryMaxAttempts: Math.min(
+                            AUTO_RETRY_MAX_ATTEMPTS_LIMIT,
+                            Math.max(1, Number(e.target.value) || 1),
+                          ),
+                        },
+                      })
+                    }
+                    className="input-dark"
+                  />
+                  <div className="mt-1.5 font-sans text-[11.5px] text-dim">
+                    De 1 a {AUTO_RETRY_MAX_ATTEMPTS_LIMIT} tentativas, a cada 30 min (ex.: 10 tentativas cobrem 5
+                    horas). Na prática, o dia acaba primeiro para horários mais tarde — as retentativas param à
+                    meia-noite mesmo que o limite configurado não tenha se esgotado.
+                  </div>
+                </>
+              )}
             </>
           )}
 

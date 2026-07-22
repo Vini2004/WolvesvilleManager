@@ -19,13 +19,8 @@ namespace WolvesvilleManager.Application.Scheduling;
 /// </summary>
 public class ScheduledTaskExecutor
 {
-    /// <summary>
-    /// Quantas retentativas automáticas são feitas no mesmo dia quando o XP do tier ainda não
-    /// bateu. Público porque o gatilho externo (cron-job.org) — que não sabe nada sobre
-    /// <see cref="ScheduledTask.NextRunAtUtc"/> — precisa saber quantos pings a mais criar para
-    /// que essas retentativas de fato cheguem a rodar em produção (sem Always On).
-    /// </summary>
-    public const int MaxAutoRetries = 10;
+    /// <summary>Limite máximo permitido para <see cref="ScheduledTask.AutoRetryMaxAttempts"/>.</summary>
+    public const int MaxAutoRetryAttemptsLimit = 100;
 
     public static readonly TimeSpan AutoRetryInterval = TimeSpan.FromMinutes(30);
 
@@ -462,7 +457,7 @@ public class ScheduledTaskExecutor
                      && l.Outcome == TaskExecutionOutcome.WaitingForXp
                      && l.RanAtUtc >= dayStartUtc, ct) + 1;
 
-            if (retriesSoFar <= MaxAutoRetries)
+            if (retriesSoFar <= task.AutoRetryMaxAttempts)
             {
                 // Ancorado no horário AGENDADO desta execução (não em "agora") para a grade de
                 // retentativas ficar sempre exata — 18:00 → 18:30 → 19:00 → 19:30 → 20:00 — igual
@@ -472,12 +467,12 @@ public class ScheduledTaskExecutor
                 var retryAtLocal = TimeZoneInfo.ConvertTimeFromUtc(retryAtUtc, tz);
                 return (TaskExecutionOutcome.WaitingForXp,
                     $"O XP do tier ainda não bateu o objetivo — nada a pular agora. Tenta de novo automaticamente " +
-                    $"às {retryAtLocal:HH:mm} (retentativa {retriesSoFar}/{MaxAutoRetries}).",
+                    $"às {retryAtLocal:HH:mm} (retentativa {retriesSoFar}/{task.AutoRetryMaxAttempts}).",
                     retryAtUtc);
             }
 
             return (TaskExecutionOutcome.WaitingForXp,
-                $"O XP do tier ainda não bateu o objetivo — nada a pular agora. As {MaxAutoRetries} retentativas " +
+                $"O XP do tier ainda não bateu o objetivo — nada a pular agora. As {task.AutoRetryMaxAttempts} retentativas " +
                 "automáticas de hoje já se esgotaram; a próxima tentativa é no horário normal desta automação.", null);
         }
 

@@ -54,6 +54,7 @@ public class ScheduledTaskService
             TargetQuestPromoImageUrl = request.TargetQuestPromoImageUrl?.Trim(),
             Enabled = request.Enabled,
             AutoRetryOnXpNotReached = request.AutoRetryOnXpNotReached,
+            AutoRetryMaxAttempts = request.AutoRetryMaxAttempts,
         };
         task.NextRunAtUtc = task.Enabled
             ? CronScheduleCalculator.GetNextOccurrenceUtc(task.CronExpression, task.TimeZoneId, DateTime.UtcNow)
@@ -83,6 +84,7 @@ public class ScheduledTaskService
         task.TargetQuestPromoImageUrl = request.TargetQuestPromoImageUrl?.Trim();
         task.Enabled = request.Enabled;
         task.AutoRetryOnXpNotReached = request.AutoRetryOnXpNotReached;
+        task.AutoRetryMaxAttempts = request.AutoRetryMaxAttempts;
         task.NextRunAtUtc = task.Enabled
             ? CronScheduleCalculator.GetNextOccurrenceUtc(task.CronExpression, task.TimeZoneId, DateTime.UtcNow)
             : null;
@@ -122,7 +124,7 @@ public class ScheduledTaskService
                 new CronTriggerIds(task.ExternalRunJobId, task.ExternalWarmupJobId),
                 new ScheduledTaskTrigger(
                     task.Id, task.Type, task.CronExpression, task.TimeZoneId, task.Enabled,
-                    task.AutoRetryOnXpNotReached),
+                    task.AutoRetryOnXpNotReached, task.AutoRetryMaxAttempts),
                 ct);
             task.ExternalRunJobId = ids.RunJobId;
             task.ExternalWarmupJobId = ids.WarmupJobId;
@@ -164,6 +166,9 @@ public class ScheduledTaskService
                 "Fuso horário inválido. Use um ID IANA, ex.: \"America/Sao_Paulo\".");
         if (request.MinVotes < 0)
             throw new BusinessRuleException("MinVotes não pode ser negativo.");
+        if (request.AutoRetryMaxAttempts is < 1 or > ScheduledTaskExecutor.MaxAutoRetryAttemptsLimit)
+            throw new BusinessRuleException(
+                $"O número de retentativas automáticas deve ser entre 1 e {ScheduledTaskExecutor.MaxAutoRetryAttemptsLimit}.");
         if (request.Type == ScheduledTaskType.ClaimSpecificQuest &&
             string.IsNullOrWhiteSpace(request.TargetQuestId) &&
             string.IsNullOrWhiteSpace(request.TargetQuestName) &&
@@ -174,7 +179,7 @@ public class ScheduledTaskService
     private static ScheduledTaskDto ToDto(ScheduledTask t) => new(
         t.Id, t.ClanRegistrationId, t.Type, t.CronExpression, t.TimeZoneId,
         t.Enabled, t.MinVotes, t.TargetQuestId, t.TargetQuestName, t.TargetQuestPromoImageUrl,
-        t.AutoRetryOnXpNotReached, t.NextRunAtUtc, t.LastRunAtUtc, t.CreatedAtUtc);
+        t.AutoRetryOnXpNotReached, t.AutoRetryMaxAttempts, t.NextRunAtUtc, t.LastRunAtUtc, t.CreatedAtUtc);
 }
 
 public record CreateScheduledTaskRequest(
@@ -186,7 +191,8 @@ public record CreateScheduledTaskRequest(
     string? TargetQuestName = null,
     string? TargetQuestPromoImageUrl = null,
     bool Enabled = true,
-    bool AutoRetryOnXpNotReached = true);
+    bool AutoRetryOnXpNotReached = true,
+    int AutoRetryMaxAttempts = 10);
 
 public record ScheduledTaskDto(
     int Id,
@@ -200,6 +206,7 @@ public record ScheduledTaskDto(
     string? TargetQuestName,
     string? TargetQuestPromoImageUrl,
     bool AutoRetryOnXpNotReached,
+    int AutoRetryMaxAttempts,
     DateTime? NextRunAtUtc,
     DateTime? LastRunAtUtc,
     DateTime CreatedAtUtc);

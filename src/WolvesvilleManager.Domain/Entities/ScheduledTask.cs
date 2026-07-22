@@ -54,11 +54,18 @@ public class ScheduledTask
 
     /// <summary>
     /// Só vale para <see cref="ScheduledTaskType.SkipQuestWaitingTime"/>: quando o XP do tier ainda
-    /// não bateu o objetivo no horário configurado, tenta de novo sozinha a cada 30 min (até 4
-    /// vezes) em vez de esperar só a próxima ocorrência normal do cron. Desligado = tenta uma vez
-    /// no horário configurado e pronto (a menos que o próprio cron tenha mais horários no dia).
+    /// não bateu o objetivo no horário configurado, tenta de novo sozinha a cada 30 min (até
+    /// <see cref="AutoRetryMaxAttempts"/> vezes) em vez de esperar só a próxima ocorrência normal
+    /// do cron. Desligado = tenta uma vez no horário configurado e pronto (a menos que o próprio
+    /// cron tenha mais horários no dia).
     /// </summary>
     public bool AutoRetryOnXpNotReached { get; set; } = true;
+
+    /// <summary>
+    /// Quantas retentativas automáticas (a cada 30 min) são feitas no mesmo dia quando
+    /// <see cref="AutoRetryOnXpNotReached"/> está ligado. Configurável por automação, de 1 a 100.
+    /// </summary>
+    public int AutoRetryMaxAttempts { get; set; } = 10;
 
     /// <summary>Próxima execução, pré-calculada em UTC (indexada para o poll do agendador).</summary>
     public DateTime? NextRunAtUtc { get; set; }
