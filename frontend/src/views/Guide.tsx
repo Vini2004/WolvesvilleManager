@@ -62,10 +62,11 @@ export function Guide() {
           </Topic>
           <Topic title="Pular espera com retentativa automática">
             Ela só age quando o XP do tier já bateu o objetivo. Se ainda não bateu no horário
-            configurado, o app tenta de novo sozinho a cada 30 minutos, até 10 vezes — não precisa
-            colocar vários horários no cron. Depois da 10ª retentativa sem sucesso, só tenta de novo
-            no próximo horário normal da automação. E ela garante no máximo 1 pulo por dia, então as
-            tentativas seguintes não arriscam pular a espera do tier errado.
+            configurado, o app tenta de novo sozinho a cada 30 minutos, até a quantidade de vezes que
+            você definir (de 1 a 100) — não precisa colocar vários horários no cron. Depois da
+            última retentativa sem sucesso, só tenta de novo no próximo horário normal da automação.
+            E ela garante no máximo 1 pulo por dia, então as tentativas seguintes não arriscam pular
+            a espera do tier errado.
           </Topic>
           <Topic title="Cada automação acorda o app sozinha">
             O app fica "dormindo" na maior parte do tempo (hospedagem gratuita); cada automação cria um

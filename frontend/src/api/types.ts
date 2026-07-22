@@ -189,8 +189,10 @@ export interface ScheduledTask {
   targetQuestId: string | null
   targetQuestName: string | null
   targetQuestPromoImageUrl: string | null
-  /** Só vale para 'SkipQuestWaitingTime': tenta de novo a cada 30min (até 10x) se o XP do tier não bateu. */
+  /** Só vale para 'SkipQuestWaitingTime': tenta de novo a cada 30min (até autoRetryMaxAttempts vezes) se o XP do tier não bateu. */
   autoRetryOnXpNotReached: boolean
+  /** Quantas retentativas automáticas (a cada 30min) são feitas no mesmo dia. De 1 a 100. */
+  autoRetryMaxAttempts: number
   nextRunAtUtc: string | null
   lastRunAtUtc: string | null
   createdAtUtc: string
@@ -206,6 +208,7 @@ export interface CreateScheduledTaskRequest {
   targetQuestPromoImageUrl?: string | null
   enabled: boolean
   autoRetryOnXpNotReached: boolean
+  autoRetryMaxAttempts: number
 }
 
 export interface TaskExecutionLog {

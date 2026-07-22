@@ -42,7 +42,7 @@ public sealed class CronJobOrgGateway : ICronTriggerGateway
         // Always On). Cron "avançado" (fora do formato simples) cai pro schedule normal.
         var runSchedule = t.Type == ScheduledTaskType.SkipQuestWaitingTime && t.AutoRetryOnXpNotReached
             ? CronJobOrgTranslator.TryScheduleWithRetries(
-                t.CronExpression, (int)ScheduledTaskExecutor.AutoRetryInterval.TotalMinutes, ScheduledTaskExecutor.MaxAutoRetries)
+                t.CronExpression, (int)ScheduledTaskExecutor.AutoRetryInterval.TotalMinutes, t.AutoRetryMaxAttempts)
               ?? CronJobOrgTranslator.ToSchedule(t.CronExpression)
             : CronJobOrgTranslator.ToSchedule(t.CronExpression);
 

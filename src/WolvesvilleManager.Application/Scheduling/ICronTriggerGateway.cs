@@ -11,7 +11,7 @@ public readonly record struct CronTriggerIds(int? RunJobId, int? WarmupJobId);
 /// <summary>Dados de uma tarefa necessários para montar os gatilhos externos.</summary>
 public sealed record ScheduledTaskTrigger(
     int TaskId, ScheduledTaskType Type, string CronExpression, string TimeZoneId, bool Enabled,
-    bool AutoRetryOnXpNotReached);
+    bool AutoRetryOnXpNotReached, int AutoRetryMaxAttempts);
 
 /// <summary>
 /// Porta para um agendador externo (cron-job.org) que "acorda" o app/banco no horário de cada
