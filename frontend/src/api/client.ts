@@ -228,6 +228,11 @@ export const api = {
     }),
   clearPollWindows: (clanId: number) =>
     request<void>(`/api/clans/${clanId}/poll/windows`, { method: 'DELETE' }),
+  setPollQuestHidden: (clanId: number, questId: string, hidden: boolean) =>
+    request<void>(`/api/clans/${clanId}/poll/quests/visibility`, {
+      method: 'PUT',
+      body: JSON.stringify({ questId, hidden }),
+    }),
   // Rotas públicas: o backend não exige X-Api-Key em /api/poll/* (o token do link é a credencial).
   getPublicPoll: (token: string, nickname: string) =>
     request<PollInfo>(`/api/poll/${token}?nickname=${encodeURIComponent(nickname)}`),

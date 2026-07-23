@@ -114,6 +114,8 @@ export interface PollQuest {
   imageUrl: string | null
   gems: boolean
   votes: number
+  /** Só relevante na aba admin: o admin desligou a visibilidade dessa missão no formulário público. */
+  hidden: boolean
 }
 
 /** Página pública: candidatas + o voto deste navegador + a próxima transição (abre/fecha). */

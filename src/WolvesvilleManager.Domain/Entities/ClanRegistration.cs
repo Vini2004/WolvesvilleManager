@@ -55,6 +55,12 @@ public class ClanRegistration
     public string? PollWindowsTimeZoneId { get; set; }
 
     /// <summary>
+    /// Missões que o admin ocultou do formulário público (por chave estável). Uma missão listada
+    /// aqui não aparece na página pública nem aceita votos — ver <see cref="PollHiddenQuest"/>.
+    /// </summary>
+    public List<PollHiddenQuest> PollHiddenQuests { get; set; } = new();
+
+    /// <summary>
     /// Fim (UTC) do último ciclo de <see cref="PollWindows"/> já apurado por uma automação
     /// "mais votada do formulário" — evita que a mesma rodada seja aplicada duas vezes caso a
     /// automação rode mais de uma vez antes do próximo ciclo terminar.

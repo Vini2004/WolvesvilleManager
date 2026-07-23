@@ -15,6 +15,7 @@ public class AppDbContext : DbContext, IAppDbContext
     public DbSet<QuestPollVote> QuestPollVotes => Set<QuestPollVote>();
     public DbSet<QuestPollResult> QuestPollResults => Set<QuestPollResult>();
     public DbSet<PollWindow> PollWindows => Set<PollWindow>();
+    public DbSet<PollHiddenQuest> PollHiddenQuests => Set<PollHiddenQuest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -53,11 +54,23 @@ public class AppDbContext : DbContext, IAppDbContext
                 .WithOne(w => w.ClanRegistration)
                 .HasForeignKey(w => w.ClanRegistrationId)
                 .OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(c => c.PollHiddenQuests)
+                .WithOne(h => h.ClanRegistration)
+                .HasForeignKey(h => h.ClanRegistrationId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<PollWindow>(e =>
         {
             e.HasIndex(w => w.ClanRegistrationId);
+        });
+
+        modelBuilder.Entity<PollHiddenQuest>(e =>
+        {
+            // Uma linha por (clã, missão oculta) — o índice único é rede de segurança contra
+            // duplicata; a aplicação já checa antes de inserir.
+            e.HasIndex(h => new { h.ClanRegistrationId, h.QuestKey }).IsUnique();
+            e.Property(h => h.QuestKey).HasMaxLength(80);
         });
 
         modelBuilder.Entity<ScheduledTask>(e =>

@@ -90,6 +90,13 @@ export function Guide() {
             vencer a apuração, a automação embaralha as missões em vez de iniciar uma — para quando
             ninguém no clã gosta das opções atuais.
           </Topic>
+          <Topic title="Esconder missões do formulário">
+            Na apuração, cada missão (e o "Embaralhar") tem um interruptor de visibilidade. Desligue-o
+            para tirar aquela missão do formulário público — ela some para quem vota e para de receber
+            votos, mas continua na lista da aba admin, esmaecida, para você reexibir quando quiser. A
+            escolha vale pela identidade da missão, então continua valendo mesmo depois de a oferta
+            sair e voltar de cartaz.
+          </Topic>
           <Topic title="Prazo obrigatório">
             Toda votação tem um prazo — nunca fica aberta para sempre. Depois que o prazo passa, o
             formulário continua visível mas para de aceitar votos novos, até você definir um prazo

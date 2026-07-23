@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { POLL_DURATION_LABELS, SHUFFLE_OPTION_ID, type PollDuration, type Weekday } from '../api/types'
-import { ErrorBox, Loading, SectionTitle } from '../components/ui'
+import { ErrorBox, Loading, SectionTitle, Toggle } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 import { fmtDateTime, timeLeft } from '../lib/format'
 import { WEEKDAY_OPTIONS } from '../lib/cron'
@@ -124,6 +124,19 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
     setError(null)
     try {
       await api.clearPollWindows(clanRegId)
+      poll.reload()
+    } catch (e: unknown) {
+      setError(e instanceof ApiError ? e.message : 'Erro inesperado.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const toggleVisibility = async (questId: string, hidden: boolean) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await api.setPollQuestHidden(clanRegId, questId, hidden)
       poll.reload()
     } catch (e: unknown) {
       setError(e instanceof ApiError ? e.message : 'Erro inesperado.')
@@ -301,13 +314,17 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
         )}
       </div>
 
-      <div className="mb-3.5 flex items-center justify-between">
+      <div className="mb-1.5 flex items-center justify-between">
         <SectionTitle>
           Apuração · {totalShown} voto{totalShown === 1 ? '' : 's'}
         </SectionTitle>
         <button onClick={reset} disabled={busy || poll.data.totalVotes === 0} className="btn-danger-ghost">
           {busy ? 'Zerando…' : 'Zerar votos'}
         </button>
+      </div>
+      <div className="mb-3.5 font-sans text-[12px] text-dim">
+        Use o interruptor de cada missão para escolher se ela aparece no formulário público. Missões
+        ocultas ficam esmaecidas aqui e não recebem votos — mas continuam listadas para você reexibi-las.
       </div>
       {error && (
         <div className="mb-4">
@@ -319,7 +336,7 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
           const isShuffle = q.questId === SHUFFLE_OPTION_ID
           const voters = poll.data!.voters.filter((v) => v.questId === q.questId)
           return (
-            <div key={q.questId} className="list-card px-5 py-4">
+            <div key={q.questId} className={`list-card px-5 py-4 ${q.hidden ? 'opacity-55' : ''}`}>
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0 font-sans text-[14px] font-semibold text-ink-2">
                   {isShuffle ? '🔀 ' : ''}
@@ -337,6 +354,12 @@ export function Poll({ clanRegId }: { clanRegId: number }) {
                   className="h-full rounded bg-gradient-to-r from-violet to-gold transition-[width]"
                   style={{ width: `${(q.votes / max) * 100}%` }}
                 />
+              </div>
+              <div className="mt-3 flex items-center gap-2.5">
+                <Toggle on={!q.hidden} disabled={busy} onClick={() => toggleVisibility(q.questId, !q.hidden)} />
+                <span className="font-sans text-[12px] text-muted">
+                  {q.hidden ? 'Oculta no formulário' : 'Visível no formulário'}
+                </span>
               </div>
               {voters.length > 0 && (
                 <div className="mt-2.5 font-sans text-[12px] leading-relaxed text-lav">
