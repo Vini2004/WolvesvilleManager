@@ -16,6 +16,7 @@ public interface IAppDbContext
     DbSet<QuestPollVote> QuestPollVotes { get; }
     DbSet<QuestPollResult> QuestPollResults { get; }
     DbSet<PollWindow> PollWindows { get; }
+    DbSet<PollHiddenQuest> PollHiddenQuests { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
 }

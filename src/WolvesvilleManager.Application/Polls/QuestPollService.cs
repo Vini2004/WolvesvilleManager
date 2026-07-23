@@ -1,14 +1,19 @@
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using WolvesvilleManager.Application.Common;
+using WolvesvilleManager.Application.Quests;
 using WolvesvilleManager.Application.Scheduling;
 using WolvesvilleManager.Domain.Entities;
 using WolvesvilleManager.Domain.Interfaces;
 
 namespace WolvesvilleManager.Application.Polls;
 
-/// <summary>Missão candidata no formulário, com a contagem atual de votos.</summary>
-public record PollQuestDto(string QuestId, string Name, string? ImageUrl, bool Gems, int Votes);
+/// <summary>
+/// Missão candidata no formulário, com a contagem atual de votos. <paramref name="Hidden"/> só é
+/// relevante na aba admin (a página pública nunca recebe as ocultas): indica se o admin desligou
+/// a visibilidade dessa missão no formulário público.
+/// </summary>
+public record PollQuestDto(string QuestId, string Name, string? ImageUrl, bool Gems, int Votes, bool Hidden);
 
 /// <summary>O que a página pública vê: nome do clã, candidatas, o voto deste nick e a próxima transição.</summary>
 public record PollDto(
@@ -90,7 +95,8 @@ public class QuestPollService
         }
 
         var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
-        var quests = await BuildQuestsAsync(reg.Id, apiKey, reg.ClanId, ct);
+        // Admin vê também as ocultas (marcadas), para poder reexibi-las.
+        var quests = await BuildQuestsAsync(reg.Id, apiKey, reg.ClanId, includeHidden: true, ct);
         var questNames = quests.ToDictionary(q => q.QuestId, q => q.Name);
 
         var currentVotes = await _db.QuestPollVotes
@@ -216,12 +222,55 @@ public class QuestPollService
         await _db.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Aba admin: liga/desliga a visibilidade de uma missão no formulário público. Guarda a
+    /// escolha pela chave estável da missão (não pelo Id da oferta, que rotaciona), então a
+    /// missão continua oculta mesmo depois de sair e voltar de cartaz. "Embaralhar" também pode
+    /// ser ocultado (usa o id reservado como chave).
+    /// </summary>
+    public async Task SetQuestHiddenAsync(int clanRegistrationId, string questId, bool hidden, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(questId))
+            throw new BusinessRuleException("Missão inválida.");
+
+        var reg = await _db.ClanRegistrations.FirstOrDefaultAsync(c => c.Id == clanRegistrationId, ct)
+            ?? throw new NotFoundException($"Clã registrado #{clanRegistrationId} não encontrado.");
+
+        string key;
+        if (questId == QuestPollVote.ShuffleOptionId)
+        {
+            key = QuestPollVote.ShuffleOptionId;
+        }
+        else
+        {
+            // Resolve a chave estável pela lista de disponíveis agora — o Id sozinho não basta
+            // (ele rotaciona; a chave vem da imagem promocional).
+            var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
+            var available = await _api.GetAvailableQuestsAsync(apiKey, reg.ClanId, ct);
+            var quest = available.FirstOrDefault(q => q.Id == questId)
+                ?? throw new BusinessRuleException("Essa missão não está mais disponível — recarregue a página.");
+            key = HideKeyFor(quest.Id, quest.PromoImageUrl);
+        }
+
+        var existing = await _db.PollHiddenQuests
+            .FirstOrDefaultAsync(h => h.ClanRegistrationId == clanRegistrationId && h.QuestKey == key, ct);
+        if (hidden && existing is null)
+            _db.PollHiddenQuests.Add(new PollHiddenQuest { ClanRegistrationId = clanRegistrationId, QuestKey = key });
+        else if (!hidden && existing is not null)
+            _db.PollHiddenQuests.Remove(existing);
+        else
+            return; // já está no estado pedido — nada a gravar
+
+        await _db.SaveChangesAsync(ct);
+    }
+
     /// <summary>Página pública: candidatas + o voto já registrado por esse nick (se informado).</summary>
     public async Task<PollDto> GetPublicAsync(string token, string? nickname, CancellationToken ct = default)
     {
         var reg = await ResolveByTokenAsync(token, ct);
         var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
-        var quests = await BuildQuestsAsync(reg.Id, apiKey, reg.ClanId, ct);
+        // Página pública nunca recebe as ocultas.
+        var quests = await BuildQuestsAsync(reg.Id, apiKey, reg.ClanId, includeHidden: false, ct);
 
         string? voted = null;
         var normalized = NormalizeNickname(nickname);
@@ -256,14 +305,23 @@ public class QuestPollService
         if (!IsOpenNow(reg, windows, reg.PollWindowsTimeZoneId ?? DefaultTimeZone))
             throw new BusinessRuleException("A votação encerrou. Peça para o administrador do clã abrir um novo prazo.");
 
-        // "Embaralhar" é sempre uma opção válida; missão de verdade precisa estar disponível agora
-        // (a lista rotaciona).
-        if (questId != QuestPollVote.ShuffleOptionId)
+        var hiddenKeys = await LoadHiddenKeysAsync(reg.Id, ct);
+        if (questId == QuestPollVote.ShuffleOptionId)
         {
+            // "Embaralhar" é sempre uma opção válida — a menos que o admin a tenha ocultado.
+            if (hiddenKeys.Contains(QuestPollVote.ShuffleOptionId))
+                throw new BusinessRuleException("A opção de embaralhar não está disponível para votação — recarregue a página.");
+        }
+        else
+        {
+            // Missão de verdade precisa estar disponível agora (a lista rotaciona) e não pode
+            // estar oculta pelo admin.
             var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
             var available = await _api.GetAvailableQuestsAsync(apiKey, reg.ClanId, ct);
-            if (!available.Any(q => q.Id == questId))
-                throw new BusinessRuleException("Essa missão não está mais disponível — recarregue a página.");
+            var quest = available.FirstOrDefault(q => q.Id == questId)
+                ?? throw new BusinessRuleException("Essa missão não está mais disponível — recarregue a página.");
+            if (hiddenKeys.Contains(HideKeyFor(quest.Id, quest.PromoImageUrl)))
+                throw new BusinessRuleException("Essa missão não está disponível para votação — recarregue a página.");
         }
 
         // Comparação case-insensitive: "Fulano" e "fulano" são o mesmo voto.
@@ -315,7 +373,13 @@ public class QuestPollService
             ?? throw new NotFoundException("Votação não encontrada.");
     }
 
-    private async Task<List<PollQuestDto>> BuildQuestsAsync(int clanRegistrationId, string apiKey, string clanId, CancellationToken ct)
+    /// <summary>
+    /// Monta a lista de candidatas (disponíveis + "embaralhar") com a contagem de votos. Quando
+    /// <paramref name="includeHidden"/> é false (página pública), as missões ocultas pelo admin
+    /// são removidas; quando true (aba admin), elas aparecem marcadas (<see cref="PollQuestDto.Hidden"/>).
+    /// </summary>
+    private async Task<List<PollQuestDto>> BuildQuestsAsync(
+        int clanRegistrationId, string apiKey, string clanId, bool includeHidden, CancellationToken ct)
     {
         var available = await _api.GetAvailableQuestsAsync(apiKey, clanId, ct);
         var counts = await _db.QuestPollVotes
@@ -323,18 +387,40 @@ public class QuestPollService
             .GroupBy(v => v.QuestId)
             .Select(g => new { g.Key, Count = g.Count() })
             .ToDictionaryAsync(g => g.Key, g => g.Count, ct);
+        var hiddenKeys = await LoadHiddenKeysAsync(clanRegistrationId, ct);
 
         // Votos em missões que saíram de cartaz simplesmente não aparecem (nem contam na apuração).
-        var quests = available
-            .Select(q => new PollQuestDto(q.Id, q.DisplayName, q.PromoImageUrl, q.PurchasableWithGems, counts.GetValueOrDefault(q.Id)))
-            .ToList();
+        var quests = new List<PollQuestDto>();
+        foreach (var q in available)
+        {
+            var hidden = hiddenKeys.Contains(HideKeyFor(q.Id, q.PromoImageUrl));
+            if (hidden && !includeHidden) continue;
+            quests.Add(new PollQuestDto(q.Id, q.DisplayName, q.PromoImageUrl, q.PurchasableWithGems, counts.GetValueOrDefault(q.Id), hidden));
+        }
 
         // "Embaralhar" é mais uma cédula na mesma urna — se vencer, a automação embaralha
         // em vez de reivindicar uma missão (ver ScheduledTaskExecutor.ClaimMostVotedFormQuestAsync).
-        quests.Add(new PollQuestDto(
-            QuestPollVote.ShuffleOptionId, "Embaralhar missões", null, false,
-            counts.GetValueOrDefault(QuestPollVote.ShuffleOptionId)));
+        var shuffleHidden = hiddenKeys.Contains(QuestPollVote.ShuffleOptionId);
+        if (includeHidden || !shuffleHidden)
+            quests.Add(new PollQuestDto(
+                QuestPollVote.ShuffleOptionId, "Embaralhar missões", null, false,
+                counts.GetValueOrDefault(QuestPollVote.ShuffleOptionId), shuffleHidden));
 
         return quests;
     }
+
+    /// <summary>
+    /// Chave estável usada para ocultar uma missão: a identidade da imagem promocional
+    /// (<see cref="QuestMatchKey"/>), com fallback para o Id quando não há imagem — inclusive
+    /// "embaralhar", cujo id reservado vira a própria chave.
+    /// </summary>
+    private static string HideKeyFor(string questId, string? promoImageUrl) =>
+        QuestMatchKey.Normalize(promoImageUrl) ?? questId;
+
+    private async Task<HashSet<string>> LoadHiddenKeysAsync(int clanRegistrationId, CancellationToken ct) =>
+        (await _db.PollHiddenQuests
+            .Where(h => h.ClanRegistrationId == clanRegistrationId)
+            .Select(h => h.QuestKey)
+            .ToListAsync(ct))
+            .ToHashSet(StringComparer.Ordinal);
 }

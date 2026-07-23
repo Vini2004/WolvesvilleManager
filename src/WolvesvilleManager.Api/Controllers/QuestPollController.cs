@@ -7,6 +7,7 @@ public record VoteRequest(string QuestId, string Nickname);
 public record SetExpirationRequest(PollDuration Duration);
 public record PollWindowRequest(string StartDay, string StartTime, string EndDay, string EndTime);
 public record SetPollWindowsRequest(List<PollWindowRequest> Windows, string TimeZoneId);
+public record SetQuestVisibilityRequest(string QuestId, bool Hidden);
 
 /// <summary>
 /// Formulário público de votação de missões. As rotas /api/poll/* são as ÚNICAS
@@ -54,6 +55,15 @@ public class QuestPollController : ControllerBase
     public async Task<IActionResult> ClearWindows(int id, CancellationToken ct)
     {
         await _service.ClearWindowsAsync(id, ct);
+        return NoContent();
+    }
+
+    /// <summary>Aba admin: liga/desliga a visibilidade de uma missão no formulário público.</summary>
+    [HttpPut("api/clans/{id:int}/poll/quests/visibility")]
+    public async Task<IActionResult> SetQuestVisibility(
+        int id, [FromBody] SetQuestVisibilityRequest request, CancellationToken ct)
+    {
+        await _service.SetQuestHiddenAsync(id, request.QuestId, request.Hidden, ct);
         return NoContent();
     }
 
