@@ -594,11 +594,12 @@ public class ScheduledTaskExecutorTests
     }
 
     [Fact]
-    public async Task WelcomeNewMembers_JoinRequestAccepted_MandaMensagemEIgnoraOPedidoEmSi()
+    public async Task WelcomeNewMembers_JoinRequestAccepted_MarcaOAlvoNaoQuemAceitou()
     {
         // Ação real confirmada em log de produção: clã com entrada por pedido usa
         // "JOIN_REQUEST_ACCEPTED" (não "JOIN"). O pedido em si, "JOIN_REQUEST_SENT_BY_EXTERNAL_PLAYER",
-        // não deve contar como entrada — só quando o pedido é aceito.
+        // não deve contar como entrada — só quando o pedido é aceito. E quem entrou é o ALVO
+        // (TargetPlayerUsername); o PlayerUsername é quem aceitou (líder/co-líder).
         using var db = CreateDb();
         var clan = new ClanRegistration
         {
@@ -618,13 +619,14 @@ public class ScheduledTaskExecutorTests
                 new ClanLogEntry
                 {
                     Action = "JOIN_REQUEST_SENT_BY_EXTERNAL_PLAYER",
-                    PlayerUsername = "BOB_HEROI",
+                    PlayerUsername = "heitooooior",
                     CreationTime = DateTime.UtcNow.AddMinutes(-2).ToString("O"),
                 },
                 new ClanLogEntry
                 {
                     Action = "JOIN_REQUEST_ACCEPTED",
-                    PlayerUsername = "BOB_HEROI",
+                    PlayerUsername = "0Hermione",       // quem aceitou (líder)
+                    TargetPlayerUsername = "heitooooior", // quem de fato entrou
                     CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
                 },
             ],
@@ -633,7 +635,8 @@ public class ScheduledTaskExecutorTests
         await CreateExecutor(db, api).ExecuteDueTasksAsync();
 
         var message = Assert.Single(api.SentChatMessages);
-        Assert.Contains("@BOB_HEROI", message);
+        Assert.Contains("@heitooooior", message);
+        Assert.DoesNotContain("@0Hermione", message);
     }
 
     [Fact]
