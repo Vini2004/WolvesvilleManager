@@ -195,10 +195,11 @@ public class ScheduledTaskExecutor
                 var pending = joins.Where(x => x.At > reg.LastWelcomedJoinAtUtc).ToList();
                 foreach (var (entry, at) in pending)
                 {
-                    if (!string.IsNullOrWhiteSpace(entry.PlayerUsername))
+                    var username = NewMemberUsername(entry);
+                    if (!string.IsNullOrWhiteSpace(username))
                     {
                         var template = reg.WelcomeMessageTemplate ?? ClanSocialService.DefaultWelcomeMessageTemplate;
-                        var message = template.Replace("{mention}", $"@{entry.PlayerUsername}");
+                        var message = template.Replace("{mention}", $"@{username}");
                         await _api.SendChatMessageAsync(apiKey, reg.ClanId, message, ct);
                     }
                     // Sempre avança a régua, mesmo sem username (log incompleto) — senão a
@@ -213,6 +214,16 @@ public class ScheduledTaskExecutor
             }
         }
     }
+
+    /// <summary>
+    /// O nick de quem ACABOU DE ENTRAR na entrada de log. Em "pedido de entrada aceito"
+    /// (JOIN_REQUEST_ACCEPTED) quem entrou é o ALVO (<see cref="ClanLogEntry.TargetPlayerUsername"/>) —
+    /// o <see cref="ClanLogEntry.PlayerUsername"/> é quem aceitou (líder/co-líder), então usar o
+    /// PlayerUsername marcava a pessoa errada. Nas outras ações de entrada (entrada livre/convite),
+    /// quem entrou é o próprio autor da ação.
+    /// </summary>
+    private static string? NewMemberUsername(ClanLogEntry log) =>
+        log.Action == "JOIN_REQUEST_ACCEPTED" ? log.TargetPlayerUsername : log.PlayerUsername;
 
     private static DateTime? ParseLogTime(string? raw) =>
         DateTimeOffset.TryParse(raw, out var parsed) ? parsed.UtcDateTime : null;
