@@ -671,4 +671,89 @@ public class ScheduledTaskExecutorTests
 
         Assert.Empty(api.SentChatMessages);
     }
+
+    private static readonly TimeZoneInfo WelcomeTz = TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
+
+    [Fact]
+    public async Task WelcomeNewMembers_ComHorario_NaoSoltaAntesDoHorarioDeLiberacao()
+    {
+        using var db = CreateDb();
+        // Horário de liberação daqui ~3h (no fuso das boas-vindas): a entrada de agora só deve
+        // ser saudada quando esse horário chegar — não neste acorda.
+        var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, WelcomeTz);
+        var sendTime = nowLocal.TimeOfDay + TimeSpan.FromHours(3);
+        if (sendTime >= TimeSpan.FromDays(1)) sendTime -= TimeSpan.FromDays(1);
+
+        var watermark = DateTime.UtcNow.AddHours(-1);
+        var clan = new ClanRegistration
+        {
+            ClanId = "clan-1",
+            ClanName = "Clã de Teste",
+            ProtectedApiKey = "chave-teste",
+            WelcomeMessageEnabled = true,
+            LastWelcomedJoinAtUtc = watermark,
+            WelcomeSendTime1 = sendTime,
+        };
+        db.ClanRegistrations.Add(clan);
+        db.SaveChanges();
+
+        var api = new FakeWolvesvilleClient
+        {
+            Logs =
+            [
+                new ClanLogEntry
+                {
+                    Action = "JOIN",
+                    PlayerUsername = "Fulano",
+                    CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
+                },
+            ],
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        Assert.Empty(api.SentChatMessages);
+        // Régua não avança: a entrada continua pendente para o próximo acorda.
+        Assert.Equal(watermark, clan.LastWelcomedJoinAtUtc);
+    }
+
+    [Fact]
+    public async Task WelcomeNewMembers_ComHorario_SoltaQuandoOHorarioJaPassou()
+    {
+        using var db = CreateDb();
+        // Horário de liberação ~2h atrás e entrada ~5h atrás: já passou → sauda agora.
+        var nowLocal = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, WelcomeTz);
+        var sendTime = nowLocal.TimeOfDay - TimeSpan.FromHours(2);
+        if (sendTime < TimeSpan.Zero) sendTime += TimeSpan.FromDays(1);
+
+        var clan = new ClanRegistration
+        {
+            ClanId = "clan-1",
+            ClanName = "Clã de Teste",
+            ProtectedApiKey = "chave-teste",
+            WelcomeMessageEnabled = true,
+            LastWelcomedJoinAtUtc = DateTime.UtcNow.AddHours(-6),
+            WelcomeSendTime1 = sendTime,
+        };
+        db.ClanRegistrations.Add(clan);
+        db.SaveChanges();
+
+        var api = new FakeWolvesvilleClient
+        {
+            Logs =
+            [
+                new ClanLogEntry
+                {
+                    Action = "JOIN",
+                    PlayerUsername = "Fulano",
+                    CreationTime = DateTime.UtcNow.AddHours(-5).ToString("O"),
+                },
+            ],
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        var message = Assert.Single(api.SentChatMessages);
+        Assert.Contains("@Fulano", message);
+    }
 }

@@ -192,9 +192,19 @@ public class ScheduledTaskExecutor
                     continue;
                 }
 
+                var sendTimes = WelcomeSendTimes(reg);
+                var tz = TimeZoneInfo.FindSystemTimeZoneById(ClanSocialService.WelcomeTimeZoneId);
+                var now = DateTime.UtcNow;
+
                 var pending = joins.Where(x => x.At > reg.LastWelcomedJoinAtUtc).ToList();
                 foreach (var (entry, at) in pending)
                 {
+                    // Boas-vindas represadas: só solta quando o horário de liberação da entrada já
+                    // passou. O horário de liberação cresce junto com o horário da entrada, então
+                    // ao achar uma ainda não liberada, todas as seguintes também não estão — para
+                    // aqui e reavalia no próximo acorda (sem avançar a régua além dela).
+                    if (now < ReleaseTimeUtc(at!.Value, sendTimes, tz)) break;
+
                     var username = NewMemberUsername(entry);
                     if (!string.IsNullOrWhiteSpace(username))
                     {
@@ -224,6 +234,40 @@ public class ScheduledTaskExecutor
     /// </summary>
     private static string? NewMemberUsername(ClanLogEntry log) =>
         log.Action == "JOIN_REQUEST_ACCEPTED" ? log.TargetPlayerUsername : log.PlayerUsername;
+
+    private static List<TimeSpan> WelcomeSendTimes(ClanRegistration reg)
+    {
+        var times = new List<TimeSpan>();
+        if (reg.WelcomeSendTime1 is { } t1) times.Add(t1);
+        if (reg.WelcomeSendTime2 is { } t2) times.Add(t2);
+        return times;
+    }
+
+    /// <summary>
+    /// Momento (UTC) em que a boas-vindas de uma entrada pode ser solta. Com horários configurados,
+    /// é a PRÓXIMA ocorrência de um horário de liberação estritamente após a entrada (no fuso das
+    /// boas-vindas) — quem entra logo depois de um horário só é saudado no seguinte. Sem horários,
+    /// libera na hora (o próprio instante da entrada), mantendo o comportamento antigo.
+    /// </summary>
+    private static DateTime ReleaseTimeUtc(DateTime joinUtc, List<TimeSpan> sendTimes, TimeZoneInfo tz)
+    {
+        if (sendTimes.Count == 0) return joinUtc;
+
+        var joinLocal = TimeZoneInfo.ConvertTimeFromUtc(joinUtc, tz);
+        DateTime? best = null;
+        for (var dayOffset = 0; dayOffset <= 1; dayOffset++)
+        {
+            var day = joinLocal.Date.AddDays(dayOffset);
+            foreach (var t in sendTimes)
+            {
+                var candidate = day + t;
+                if (candidate > joinLocal && (best is null || candidate < best.Value))
+                    best = candidate;
+            }
+        }
+        // 'best' sempre existe: o dia seguinte cobre qualquer horário de entrada.
+        return TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(best!.Value, DateTimeKind.Unspecified), tz);
+    }
 
     private static DateTime? ParseLogTime(string? raw) =>
         DateTimeOffset.TryParse(raw, out var parsed) ? parsed.UtcDateTime : null;

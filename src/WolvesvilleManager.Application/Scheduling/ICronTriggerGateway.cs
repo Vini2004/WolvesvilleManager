@@ -14,6 +14,14 @@ public sealed record ScheduledTaskTrigger(
     bool AutoRetryOnXpNotReached, int AutoRetryMaxAttempts);
 
 /// <summary>
+/// Dados para montar/atualizar o job de "ping" das boas-vindas de um clã: acorda o app nos
+/// <see cref="Times"/> configurados (batendo em /api/scheduler/run) para liberar as boas-vindas
+/// represadas. <see cref="ExistingJobId"/> é o job atual (para atualizar/apagar).
+/// </summary>
+public sealed record WelcomePingTrigger(
+    int ClanRegistrationId, int? ExistingJobId, IReadOnlyList<TimeSpan> Times, string TimeZoneId, bool Enabled);
+
+/// <summary>
 /// Porta para um agendador externo (cron-job.org) que "acorda" o app/banco no horário de cada
 /// tarefa. Numa hospedagem sem Always On e com banco serverless que auto-pausa, isso substitui um
 /// keep-alive frequente — que manteria o banco ativo 24/7 e queimaria a cota mensal do plano free.
@@ -28,4 +36,10 @@ public interface ICronTriggerGateway
 
     /// <summary>Remove os gatilhos da tarefa (execução e pré-aquecimento).</summary>
     Task DeleteAsync(CronTriggerIds existing, CancellationToken ct = default);
+
+    /// <summary>
+    /// Cria/atualiza o job de "ping" das boas-vindas de um clã e devolve o id (para persistir).
+    /// Sem horários ou desligado, apaga o job existente e devolve null.
+    /// </summary>
+    Task<int?> SyncWelcomePingAsync(WelcomePingTrigger trigger, CancellationToken ct = default);
 }

@@ -254,6 +254,9 @@ export interface ChatMessage {
 export interface WelcomeSettings {
   enabled: boolean
   template: string
+  /** Horários "HH:mm" (ou null) em que as boas-vindas represadas são liberadas. Ambos null = na hora. */
+  sendTime1: string | null
+  sendTime2: string | null
 }
 
 export interface LedgerEntry {
