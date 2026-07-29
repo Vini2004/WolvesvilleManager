@@ -42,7 +42,10 @@ export function Guide() {
           <Topic title="Chat">
             Lê e envia mensagens no chat do clã pelo bot. Também dá para ligar uma mensagem de
             boas-vindas automática (com "{'{mention}'}" marcando quem entrou) que dispara sozinha
-            quando alguém novo entra no clã.
+            quando alguém novo entra no clã. Opcionalmente, defina até dois horários de envio: aí as
+            boas-vindas ficam represadas e saem só nesses momentos (quem entra depois de um horário é
+            saudado no próximo), com um "toque" leve acordando o site na hora certa. Sem horários,
+            ela sauda assim que o site acordar depois da entrada.
           </Topic>
           <Topic title="Atividade">Livro-razão de ouro/gemas por membro e o log de auditoria do clã.</Topic>
           <Topic title="Jogo">

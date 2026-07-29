@@ -4,7 +4,7 @@ using WolvesvilleManager.Domain.Wolvesville;
 
 namespace WolvesvilleManager.Api.Controllers;
 
-public record SetWelcomeSettingsRequest(bool Enabled, string Template);
+public record SetWelcomeSettingsRequest(bool Enabled, string Template, string? SendTime1, string? SendTime2);
 
 /// <summary>Chat, livro-razão e logs de auditoria do clã.</summary>
 [ApiController]
@@ -37,7 +37,8 @@ public class SocialController : ControllerBase
     [HttpPut("welcome")]
     public async Task<IActionResult> SetWelcomeSettings(int id, [FromBody] SetWelcomeSettingsRequest request, CancellationToken ct)
     {
-        await _service.SetWelcomeSettingsAsync(id, request.Enabled, request.Template, ct);
+        await _service.SetWelcomeSettingsAsync(
+            id, request.Enabled, request.Template, request.SendTime1, request.SendTime2, ct);
         return NoContent();
     }
 

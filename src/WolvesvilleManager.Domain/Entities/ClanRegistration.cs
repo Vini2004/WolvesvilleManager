@@ -89,4 +89,22 @@ public class ClanRegistration
     /// a feature é ligada pela primeira vez.
     /// </summary>
     public DateTime? LastWelcomedJoinAtUtc { get; set; }
+
+    /// <summary>
+    /// Primeiro horário do dia (no fuso das boas-vindas) em que as boas-vindas represadas são
+    /// liberadas. Quem entrou depois de um horário configurado só é saudado no PRÓXIMO horário
+    /// configurado. Nulo (e <see cref="WelcomeSendTime2"/> nulo) = sem represamento: sauda assim
+    /// que o app acordar depois da entrada.
+    /// </summary>
+    public TimeSpan? WelcomeSendTime1 { get; set; }
+
+    /// <summary>Segundo horário de liberação das boas-vindas (ver <see cref="WelcomeSendTime1"/>).</summary>
+    public TimeSpan? WelcomeSendTime2 { get; set; }
+
+    /// <summary>
+    /// Id do job no cron-job.org que acorda o app nos horários de boas-vindas configurados
+    /// (<see cref="WelcomeSendTime1"/>/<see cref="WelcomeSendTime2"/>) batendo em
+    /// <c>/api/scheduler/run</c>; nulo quando não há horários ou a integração está desligada.
+    /// </summary>
+    public int? WelcomePingJobId { get; set; }
 }

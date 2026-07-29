@@ -48,6 +48,8 @@ export function Chat({ clanRegId }: { clanRegId: number }) {
   const welcome = useAsync(() => api.getWelcomeSettings(clanRegId), [clanRegId])
   const [welcomeEnabled, setWelcomeEnabled] = useState(false)
   const [welcomeTemplate, setWelcomeTemplate] = useState('')
+  const [welcomeTime1, setWelcomeTime1] = useState('')
+  const [welcomeTime2, setWelcomeTime2] = useState('')
   const [welcomeBusy, setWelcomeBusy] = useState(false)
   const [welcomeSaved, setWelcomeSaved] = useState(false)
   const [welcomeError, setWelcomeError] = useState<string | null>(null)
@@ -56,6 +58,8 @@ export function Chat({ clanRegId }: { clanRegId: number }) {
     if (welcome.data) {
       setWelcomeEnabled(welcome.data.enabled)
       setWelcomeTemplate(welcome.data.template)
+      setWelcomeTime1(welcome.data.sendTime1 ?? '')
+      setWelcomeTime2(welcome.data.sendTime2 ?? '')
     }
   }, [welcome.data])
 
@@ -63,7 +67,13 @@ export function Chat({ clanRegId }: { clanRegId: number }) {
     setWelcomeBusy(true)
     setWelcomeError(null)
     try {
-      await api.setWelcomeSettings(clanRegId, welcomeEnabled, welcomeTemplate)
+      await api.setWelcomeSettings(
+        clanRegId,
+        welcomeEnabled,
+        welcomeTemplate,
+        welcomeTime1 || null,
+        welcomeTime2 || null,
+      )
       setWelcomeSaved(true)
       setTimeout(() => setWelcomeSaved(false), 2000)
       welcome.reload()
@@ -117,6 +127,43 @@ export function Chat({ clanRegId }: { clanRegId: number }) {
               rows={4}
               className="input-dark w-full resize-y"
             />
+
+            <div className="mt-4 font-sans text-[12.5px] font-semibold text-ink-2">
+              Horários de envio (opcional)
+            </div>
+            <div className="mb-2 font-sans text-[11.5px] leading-relaxed text-dim">
+              Se definir horários, as boas-vindas ficam represadas e saem só nesses momentos (fuso de
+              Brasília): quem entrou depois de um horário é saudado no próximo. Ex.: 09:00 e 19:00 —
+              quem entra às 10:00 é saudado às 19:00; quem entra às 20:00 é saudado às 09:00 do dia
+              seguinte. O site também recebe um "toque" leve nesses horários para acordar e enviar.
+              Deixe em branco para saudar assim que o site acordar depois da entrada.
+            </div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <input
+                type="time"
+                value={welcomeTime1}
+                onChange={(e) => setWelcomeTime1(e.target.value)}
+                className="input-dark w-auto"
+              />
+              <input
+                type="time"
+                value={welcomeTime2}
+                onChange={(e) => setWelcomeTime2(e.target.value)}
+                className="input-dark w-auto"
+              />
+              {(welcomeTime1 || welcomeTime2) && (
+                <button
+                  onClick={() => {
+                    setWelcomeTime1('')
+                    setWelcomeTime2('')
+                  }}
+                  className="btn-ghost flex-none"
+                >
+                  Limpar horários
+                </button>
+              )}
+            </div>
+
             <div className="mt-3 flex items-center gap-2.5">
               <button onClick={saveWelcome} disabled={welcomeBusy} className="btn-secondary flex-none">
                 {welcomeBusy ? '…' : welcomeSaved ? 'Salvo!' : 'Salvar'}

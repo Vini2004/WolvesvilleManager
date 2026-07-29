@@ -73,6 +73,27 @@ public sealed class CronJobOrgGateway : ICronTriggerGateway
         if (existing.WarmupJobId is int w) await DeleteJobAsync(w, ct);
     }
 
+    public async Task<int?> SyncWelcomePingAsync(WelcomePingTrigger t, CancellationToken ct = default)
+    {
+        // Sem horários ou desligado: apaga o ping (se existia) e não deixa nenhum.
+        if (!t.Enabled || t.Times.Count == 0)
+        {
+            if (t.ExistingJobId is int old) await DeleteJobAsync(old, ct);
+            return null;
+        }
+
+        // Um único job cobre todos os horários: minutos × horas (produto cartesiano). Se os
+        // minutos forem iguais (ex.: 09:00 e 19:00), dispara exatamente nesses horários; minutos
+        // diferentes geram alguns pings a mais, inofensivos (o executor só solta boas-vindas cujo
+        // horário de liberação já passou).
+        var minutes = t.Times.Select(x => x.Minutes).Distinct().OrderBy(x => x).ToArray();
+        var hours = t.Times.Select(x => x.Hours).Distinct().OrderBy(x => x).ToArray();
+        var schedule = new CronJobOrgSchedule(minutes, hours, new[] { -1 }, new[] { -1 }, new[] { -1 });
+
+        return await UpsertJobAsync(
+            t.ExistingJobId, $"WVM #{t.ClanRegistrationId} boas-vindas", schedule, t.TimeZoneId, true, ct);
+    }
+
     private async Task<int?> UpsertJobAsync(
         int? jobId, string title, CronJobOrgSchedule schedule, string timeZone, bool enabled, CancellationToken ct)
     {
@@ -161,4 +182,6 @@ public sealed class NullCronTriggerGateway : ICronTriggerGateway
     public Task<CronTriggerIds> SyncAsync(CronTriggerIds existing, ScheduledTaskTrigger trigger, CancellationToken ct = default) =>
         Task.FromResult(default(CronTriggerIds));
     public Task DeleteAsync(CronTriggerIds existing, CancellationToken ct = default) => Task.CompletedTask;
+    public Task<int?> SyncWelcomePingAsync(WelcomePingTrigger trigger, CancellationToken ct = default) =>
+        Task.FromResult<int?>(null);
 }

@@ -169,10 +169,16 @@ export const api = {
   getLedger: (clanId: number) => request<LedgerEntry[]>(`/api/clans/${clanId}/ledger`),
   getLogs: (clanId: number) => request<ClanLogEntry[]>(`/api/clans/${clanId}/logs`),
   getWelcomeSettings: (clanId: number) => request<WelcomeSettings>(`/api/clans/${clanId}/welcome`),
-  setWelcomeSettings: (clanId: number, enabled: boolean, template: string) =>
+  setWelcomeSettings: (
+    clanId: number,
+    enabled: boolean,
+    template: string,
+    sendTime1: string | null,
+    sendTime2: string | null,
+  ) =>
     request<void>(`/api/clans/${clanId}/welcome`, {
       method: 'PUT',
-      body: JSON.stringify({ enabled, template }),
+      body: JSON.stringify({ enabled, template, sendTime1, sendTime2 }),
     }),
 
   // ---------- Jogo ----------
