@@ -146,14 +146,17 @@ public class ScheduledTaskExecutor
 
     /// <summary>
     /// Ações do log de auditoria que significam "esta pessoa acabou de virar membro do clã".
-    /// Confirmado por log real: clã com entrada por pedido usa "JOIN_REQUEST_ACCEPTED" (o pedido em
-    /// si, antes de aceito, é "JOIN_REQUEST_SENT_BY_EXTERNAL_PLAYER" — não conta). "JOIN" e
-    /// "ACCEPT_INVITE" ficam como fallback para clãs com entrada livre ou por convite direto, cujo
-    /// valor exato não foi confirmado ainda contra um log real desses fluxos.
+    /// Ambas confirmadas por log real, e mutuamente exclusivas por entrada (não duplicam):
+    /// <list type="bullet">
+    /// <item>"JOIN_REQUEST_ACCEPTED": o clã aceitou um PEDIDO de entrada — quem entrou é o ALVO
+    /// (o pedido em si, "JOIN_REQUEST_SENT_BY_EXTERNAL_PLAYER", não conta).</item>
+    /// <item>"PLAYER_JOINED": a pessoa entrou (por convite do clã — "JOIN_REQUEST_SENT_BY_CLAN" é o
+    /// convite, não conta — ou entrada livre); quem entrou é o próprio autor da ação.</item>
+    /// </list>
     /// </summary>
     private static readonly HashSet<string> MemberJoinedLogActions = new(StringComparer.Ordinal)
     {
-        "JOIN_REQUEST_ACCEPTED", "JOIN", "ACCEPT_INVITE",
+        "JOIN_REQUEST_ACCEPTED", "PLAYER_JOINED",
     };
 
     /// <summary>
