@@ -15,7 +15,9 @@ const LEDGER_TYPES: Record<string, string> = {
 
 const LOG_ACTIONS: Record<string, string> = {
   JOIN: 'entrou no clã',
+  PLAYER_JOINED: 'entrou no clã',
   LEAVE: 'saiu do clã',
+  PLAYER_LEFT: 'saiu do clã',
   KICK: 'expulsou',
   BLOCK: 'bloqueou',
   UNBLOCK: 'desbloqueou',
@@ -24,6 +26,7 @@ const LOG_ACTIONS: Record<string, string> = {
   ACCEPT_INVITE: 'aceitou o convite',
   DECLINE_INVITE: 'recusou o convite',
   JOIN_REQUEST_SENT_BY_EXTERNAL_PLAYER: 'pediu para entrar',
+  JOIN_REQUEST_SENT_BY_CLAN: 'convidou para o clã',
   JOIN_REQUEST_ACCEPTED: 'pedido de entrada aceito',
 }
 

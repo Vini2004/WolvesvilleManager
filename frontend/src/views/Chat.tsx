@@ -132,10 +132,12 @@ export function Chat({ clanRegId }: { clanRegId: number }) {
               Horários de envio (opcional)
             </div>
             <div className="mb-2 font-sans text-[11.5px] leading-relaxed text-dim">
-              Se definir horários, as boas-vindas ficam represadas e saem só nesses momentos (fuso de
-              Brasília): quem entrou depois de um horário é saudado no próximo. Ex.: 09:00 e 19:00 —
-              quem entra às 10:00 é saudado às 19:00; quem entra às 20:00 é saudado às 09:00 do dia
-              seguinte. O site também recebe um "toque" leve nesses horários para acordar e enviar.
+              Se definir horários, as boas-vindas ficam represadas e liberadas a partir desses
+              horários (fuso de Brasília): quem entra depois de um horário é saudado no próximo —
+              ex.: com 09:00 e 19:00, quem entra às 10:00 é saudado a partir das 19:00; quem entra
+              às 20:00, a partir das 09:00 do dia seguinte. Não é exclusivo desses instantes: o site
+              recebe um "toque" leve neles para acordar e enviar, mas qualquer vez que ele já esteja
+              acordado (por outra automação) depois do horário de liberação a mensagem também sai.
               Deixe em branco para saudar assim que o site acordar depois da entrada.
             </div>
             <div className="flex flex-wrap items-center gap-2.5">

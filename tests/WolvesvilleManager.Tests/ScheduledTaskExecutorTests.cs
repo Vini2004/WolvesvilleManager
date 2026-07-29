@@ -543,7 +543,7 @@ public class ScheduledTaskExecutorTests
             [
                 new ClanLogEntry
                 {
-                    Action = "JOIN",
+                    Action = "PLAYER_JOINED",
                     PlayerUsername = "Fulano",
                     CreationTime = DateTimeOffset.UtcNow.AddMinutes(-5).ToString("O"),
                 },
@@ -578,7 +578,7 @@ public class ScheduledTaskExecutorTests
             [
                 new ClanLogEntry
                 {
-                    Action = "JOIN",
+                    Action = "PLAYER_JOINED",
                     PlayerUsername = "Fulano",
                     CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
                 },
@@ -640,6 +640,50 @@ public class ScheduledTaskExecutorTests
     }
 
     [Fact]
+    public async Task WelcomeNewMembers_PlayerJoinedPorConvite_MarcaQuemEntrou()
+    {
+        // Fluxo de convite confirmado em log real: o clã convida ("JOIN_REQUEST_SENT_BY_CLAN",
+        // que NÃO conta como entrada) e depois a pessoa entra com "PLAYER_JOINED" — quem entrou é
+        // o próprio autor da ação.
+        using var db = CreateDb();
+        var clan = new ClanRegistration
+        {
+            ClanId = "clan-1",
+            ClanName = "Clã de Teste",
+            ProtectedApiKey = "chave-teste",
+            WelcomeMessageEnabled = true,
+            LastWelcomedJoinAtUtc = DateTime.UtcNow.AddHours(-1),
+        };
+        db.ClanRegistrations.Add(clan);
+        db.SaveChanges();
+
+        var api = new FakeWolvesvilleClient
+        {
+            Logs =
+            [
+                new ClanLogEntry
+                {
+                    Action = "JOIN_REQUEST_SENT_BY_CLAN",
+                    PlayerUsername = "0Hermione",
+                    TargetPlayerUsername = "Nebas",
+                    CreationTime = DateTime.UtcNow.AddMinutes(-4).ToString("O"),
+                },
+                new ClanLogEntry
+                {
+                    Action = "PLAYER_JOINED",
+                    PlayerUsername = "Nebas",
+                    CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
+                },
+            ],
+        };
+
+        await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        var message = Assert.Single(api.SentChatMessages);
+        Assert.Contains("@Nebas", message);
+    }
+
+    [Fact]
     public async Task WelcomeNewMembers_Desligado_NaoMandaMensagem()
     {
         using var db = CreateDb();
@@ -660,7 +704,7 @@ public class ScheduledTaskExecutorTests
             [
                 new ClanLogEntry
                 {
-                    Action = "JOIN",
+                    Action = "PLAYER_JOINED",
                     PlayerUsername = "Fulano",
                     CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
                 },
@@ -703,7 +747,7 @@ public class ScheduledTaskExecutorTests
             [
                 new ClanLogEntry
                 {
-                    Action = "JOIN",
+                    Action = "PLAYER_JOINED",
                     PlayerUsername = "Fulano",
                     CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
                 },
@@ -744,7 +788,7 @@ public class ScheduledTaskExecutorTests
             [
                 new ClanLogEntry
                 {
-                    Action = "JOIN",
+                    Action = "PLAYER_JOINED",
                     PlayerUsername = "Fulano",
                     CreationTime = DateTime.UtcNow.AddHours(-5).ToString("O"),
                 },
