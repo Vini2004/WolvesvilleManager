@@ -22,6 +22,7 @@ import type {
   RegisteredClan,
   ScheduledTask,
   TaskExecutionLog,
+  WelcomeCheckResult,
   WelcomeSettings,
   XpReport,
 } from './types'
@@ -180,6 +181,8 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ enabled, template, sendTime1, sendTime2 }),
     }),
+  runWelcomeCheck: (clanId: number) =>
+    request<WelcomeCheckResult>(`/api/clans/${clanId}/welcome/run`, { method: 'POST' }),
 
   // ---------- Jogo ----------
   redeemApiHat: (clanId: number) =>

@@ -63,7 +63,7 @@ public class ScheduledTaskExecutorTests
 
         var executed = await CreateExecutor(db, api).ExecuteDueTasksAsync();
 
-        Assert.Equal(1, executed);
+        Assert.Equal(1, executed.Executed);
         Assert.Equal("quest-b", api.ClaimedQuestId);
         var log = Assert.Single(db.TaskExecutionLogs);
         Assert.Equal(TaskExecutionOutcome.Success, log.Outcome);
@@ -519,7 +519,7 @@ public class ScheduledTaskExecutorTests
 
         var executed = await CreateExecutor(db, new FakeWolvesvilleClient()).ExecuteDueTasksAsync();
 
-        Assert.Equal(0, executed);
+        Assert.Equal(0, executed.Executed);
         Assert.Empty(db.TaskExecutionLogs);
     }
 
@@ -799,5 +799,186 @@ public class ScheduledTaskExecutorTests
 
         var message = Assert.Single(api.SentChatMessages);
         Assert.Contains("@Fulano", message);
+    }
+
+    // ---------- Relatório e robustez da checagem de boas-vindas ----------
+
+    private static ClanRegistration SeedWelcomeClan(AppDbContext db, TimeSpan? sendTime = null)
+    {
+        var clan = new ClanRegistration
+        {
+            ClanId = "clan-1",
+            ClanName = "Clã de Teste",
+            ProtectedApiKey = "chave-teste",
+            WelcomeMessageEnabled = true,
+            LastWelcomedJoinAtUtc = DateTime.UtcNow.AddHours(-6),
+            WelcomeSendTime1 = sendTime,
+        };
+        db.ClanRegistrations.Add(clan);
+        db.SaveChanges();
+        return clan;
+    }
+
+    /// <summary>Horário de envio deslocado N horas de agora, no fuso das boas-vindas.</summary>
+    private static TimeSpan SendTimeOffsetHours(double hours)
+    {
+        var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, WelcomeTz).TimeOfDay
+            + TimeSpan.FromHours(hours);
+        if (local >= TimeSpan.FromDays(1)) local -= TimeSpan.FromDays(1);
+        if (local < TimeSpan.Zero) local += TimeSpan.FromDays(1);
+        return new TimeSpan(local.Hours, local.Minutes, 0);
+    }
+
+    [Fact]
+    public async Task Relatorio_MarcaComoAguardando_QuandoOHorarioAindaNaoChegou()
+    {
+        using var db = CreateDb();
+        var clan = SeedWelcomeClan(db, SendTimeOffsetHours(3)); // libera daqui ~3h
+        var api = new FakeWolvesvilleClient
+        {
+            Logs =
+            [
+                new ClanLogEntry
+                {
+                    Action = "PLAYER_JOINED",
+                    PlayerUsername = "Nebas",
+                    CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
+                },
+            ],
+        };
+
+        var report = await CreateExecutor(db, api).WelcomeClanAsync(clan);
+
+        Assert.Empty(api.SentChatMessages);
+        var entry = Assert.Single(report.Entries);
+        Assert.Equal(WelcomeEntryStatus.Held, entry.Status);
+        Assert.Equal("Nebas", entry.Username);
+        Assert.Contains("aguardando horário", report.Summary());
+        // A régua NÃO avança: a entrada continua pendente para a próxima checagem.
+        Assert.True(clan.LastWelcomedJoinAtUtc < DateTime.UtcNow.AddHours(-5));
+        // O carimbo de "última verificação" é gravado mesmo sem enviar nada.
+        Assert.NotNull(clan.LastWelcomeCheckAtUtc);
+    }
+
+    [Fact]
+    public async Task Relatorio_MarcaComoEnviada_QuandoOHorarioJaPassou()
+    {
+        using var db = CreateDb();
+        var clan = SeedWelcomeClan(db, SendTimeOffsetHours(-2)); // liberou ~2h atrás
+        var api = new FakeWolvesvilleClient
+        {
+            Logs =
+            [
+                new ClanLogEntry
+                {
+                    Action = "PLAYER_JOINED",
+                    PlayerUsername = "Nebas",
+                    CreationTime = DateTime.UtcNow.AddHours(-5).ToString("O"),
+                },
+            ],
+        };
+
+        var report = await CreateExecutor(db, api).WelcomeClanAsync(clan);
+
+        Assert.Contains("@Nebas", Assert.Single(api.SentChatMessages));
+        var entry = Assert.Single(report.Entries);
+        Assert.Equal(WelcomeEntryStatus.Sent, entry.Status);
+        Assert.Contains("1 enviada", report.Summary());
+        Assert.NotNull(clan.LastWelcomeCheckAtUtc);
+    }
+
+    [Fact]
+    public async Task Relatorio_AcaoNaoReconhecida_NaoSomeDoRelatorioDeEntradasConhecidas()
+    {
+        // Uma ação que não está na lista não vira boas-vindas — e o relatório deve refletir
+        // isso de forma visível (nenhuma entrada processada), em vez de sumir sem explicação.
+        using var db = CreateDb();
+        var clan = SeedWelcomeClan(db);
+        var api = new FakeWolvesvilleClient
+        {
+            Logs =
+            [
+                new ClanLogEntry
+                {
+                    Action = "ACAO_DESCONHECIDA",
+                    PlayerUsername = "Nebas",
+                    CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
+                },
+            ],
+        };
+
+        var report = await CreateExecutor(db, api).WelcomeClanAsync(clan);
+
+        Assert.Empty(api.SentChatMessages);
+        Assert.Empty(report.Entries);
+        Assert.Contains("Nenhuma entrada nova", report.Summary());
+    }
+
+    [Fact]
+    public async Task Relatorio_SemNickNoLog_NaoTravaAFilaDasEntradasSeguintes()
+    {
+        using var db = CreateDb();
+        var clan = SeedWelcomeClan(db);
+        var api = new FakeWolvesvilleClient
+        {
+            Logs =
+            [
+                // Pedido aceito sem o nick do alvo: impossível marcar alguém.
+                new ClanLogEntry
+                {
+                    Action = "JOIN_REQUEST_ACCEPTED",
+                    PlayerUsername = "0Hermione",
+                    TargetPlayerUsername = null,
+                    CreationTime = DateTime.UtcNow.AddMinutes(-3).ToString("O"),
+                },
+                new ClanLogEntry
+                {
+                    Action = "PLAYER_JOINED",
+                    PlayerUsername = "Nebas",
+                    CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
+                },
+            ],
+        };
+
+        var report = await CreateExecutor(db, api).WelcomeClanAsync(clan);
+
+        // A entrada sem nick é registrada como ignorada, mas a seguinte ainda é saudada.
+        Assert.Equal(2, report.Entries.Count);
+        Assert.Equal(WelcomeEntryStatus.Skipped, report.Entries[0].Status);
+        Assert.Equal(WelcomeEntryStatus.Sent, report.Entries[1].Status);
+        Assert.Contains("@Nebas", Assert.Single(api.SentChatMessages));
+    }
+
+    [Fact]
+    public async Task UmaAutomacaoComFusoInvalido_NaoImpedeAsBoasVindasDeRodarem()
+    {
+        // Regressão: antes, o cálculo da próxima ocorrência ficava fora de qualquer try e uma
+        // única tarefa com fuso inválido abortava a batida inteira — as boas-vindas, que rodavam
+        // por último, nunca aconteciam.
+        using var db = CreateDb();
+        var task = SeedDueTask(db, ScheduledTaskType.ClaimQuestExtraTime);
+        task.TimeZoneId = "Fuso/Que_Nao_Existe";
+        var clan = task.ClanRegistration;
+        clan.WelcomeMessageEnabled = true;
+        clan.LastWelcomedJoinAtUtc = DateTime.UtcNow.AddHours(-6);
+        db.SaveChanges();
+
+        var api = new FakeWolvesvilleClient
+        {
+            Logs =
+            [
+                new ClanLogEntry
+                {
+                    Action = "PLAYER_JOINED",
+                    PlayerUsername = "Nebas",
+                    CreationTime = DateTime.UtcNow.AddMinutes(-1).ToString("O"),
+                },
+            ],
+        };
+
+        var result = await CreateExecutor(db, api).ExecuteDueTasksAsync();
+
+        Assert.Equal(1, result.Welcomed);
+        Assert.Contains("@Nebas", Assert.Single(api.SentChatMessages));
     }
 }

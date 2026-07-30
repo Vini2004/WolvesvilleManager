@@ -41,8 +41,50 @@ public class ScheduledTaskExecutor
         _logger = logger;
     }
 
-    /// <summary>Executa todas as tarefas habilitadas com NextRunAtUtc vencido. Retorna quantas rodaram.</summary>
-    public async Task<int> ExecuteDueTasksAsync(CancellationToken ct = default)
+    /// <summary>
+    /// Executa a "batida" do agendador: tarefas vencidas, boas-vindas e snapshot de XP.
+    /// As três fases são ISOLADAS entre si — uma exceção em qualquer uma não impede as outras.
+    /// Isso importa porque uma única automação com cron/fuso inválido derrubava a execução
+    /// inteira e as boas-vindas (que rodavam por último) nunca aconteciam.
+    /// </summary>
+    public async Task<SchedulerRunResult> ExecuteDueTasksAsync(CancellationToken ct = default)
+    {
+        var executed = 0;
+        try
+        {
+            executed = await RunDueTasksAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha na fase de tarefas agendadas — as demais fases seguem.");
+        }
+
+        // Boas-vindas ANTES do snapshot de XP: é a fase sensível ao tempo, e o snapshot (diário,
+        // uma chamada de API por clã) é justamente o trecho mais lento, que antes consumia o
+        // orçamento da requisição e fazia as boas-vindas serem canceladas no meio.
+        var welcome = new WelcomeRunSummary();
+        try
+        {
+            welcome = await WelcomeNewMembersAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha na fase de boas-vindas.");
+        }
+
+        try
+        {
+            await SnapshotMemberXpAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Falha na fase de snapshot de XP.");
+        }
+
+        return new SchedulerRunResult(executed, welcome.Sent, welcome.Held, welcome.Clans);
+    }
+
+    private async Task<int> RunDueTasksAsync(CancellationToken ct)
     {
         var now = DateTime.UtcNow;
         var dueTasks = await _db.ScheduledTasks
@@ -64,8 +106,11 @@ public class ScheduledTaskExecutor
                 var apiKey = _protector.Unprotect(task.ClanRegistration.ProtectedApiKey, task.ClanRegistrationId);
                 (outcome, message, nextRunOverrideUtc) = await ExecuteAsync(task, apiKey, dueAtUtc, ct);
             }
-            catch (Exception ex) when (ex is WolvesvilleApiException or HttpRequestException or ApiKeyUnprotectException)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                // Filtro largo de propósito: timeout do HttpClient (TaskCanceledException),
+                // JSON inesperado, erro de banco e fuso inválido também precisam virar "Failed"
+                // desta tarefa em vez de abortar a batida inteira.
                 outcome = TaskExecutionOutcome.Failed;
                 message = ex.Message;
             }
@@ -76,8 +121,17 @@ public class ScheduledTaskExecutor
             // Uma retentativa automática (ex.: "pular espera" com XP ainda não batido) pode pedir
             // um horário mais cedo que a próxima ocorrência normal do cron — nesse caso, usa o
             // horário pedido em vez de pular direto para a próxima ocorrência.
-            task.NextRunAtUtc = nextRunOverrideUtc
-                ?? CronScheduleCalculator.GetNextOccurrenceUtc(task.CronExpression, task.TimeZoneId, DateTime.UtcNow);
+            // Cron/fuso inválido não pode derrubar a batida: deixa sem próxima execução e segue.
+            try
+            {
+                task.NextRunAtUtc = nextRunOverrideUtc
+                    ?? CronScheduleCalculator.GetNextOccurrenceUtc(task.CronExpression, task.TimeZoneId, DateTime.UtcNow);
+            }
+            catch (Exception ex)
+            {
+                task.NextRunAtUtc = null;
+                _logger.LogError(ex, "Cron/fuso inválido na tarefa #{TaskId} — desativada até ser corrigida.", task.Id);
+            }
 
             _db.TaskExecutionLogs.Add(new TaskExecutionLog
             {
@@ -94,9 +148,6 @@ public class ScheduledTaskExecutor
 
         if (dueTasks.Count > 0)
             await _db.SaveChangesAsync(ct);
-
-        await SnapshotMemberXpAsync(ct);
-        await WelcomeNewMembersAsync(ct);
 
         return dueTasks.Count;
     }
@@ -166,67 +217,157 @@ public class ScheduledTaskExecutor
     /// membros; mora aqui pelo mesmo motivo do snapshot de XP acima — é o ponto executado com
     /// regularidade garantida (BackgroundService + cron externo).
     /// </summary>
-    private async Task WelcomeNewMembersAsync(CancellationToken ct)
+    private async Task<WelcomeRunSummary> WelcomeNewMembersAsync(CancellationToken ct)
     {
         var clans = await _db.ClanRegistrations.Where(c => c.WelcomeMessageEnabled).ToListAsync(ct);
+        var summary = new WelcomeRunSummary { Clans = clans.Count };
 
         foreach (var reg in clans)
         {
             ct.ThrowIfCancellationRequested();
 
-            try
+            var report = await WelcomeClanAsync(reg, ct);
+            summary.Sent += report.Entries.Count(e => e.Status == WelcomeEntryStatus.Sent);
+            summary.Held += report.Entries.Count(e => e.Status == WelcomeEntryStatus.Held);
+        }
+
+        return summary;
+    }
+
+    /// <summary>
+    /// Processa as boas-vindas de UM clã e devolve o relatório do que aconteceu com cada entrada
+    /// recente do log. É o mesmo código usado pela batida automática e pelo botão "Verificar
+    /// entradas agora" — a diferença é só quem lê o relatório. Nunca lança: qualquer falha vira
+    /// um relatório com <see cref="WelcomeRunReport.Error"/> preenchido, para o usuário VER o
+    /// motivo em vez de sofrer um silêncio.
+    /// </summary>
+    public async Task<WelcomeRunReport> WelcomeClanAsync(ClanRegistration reg, CancellationToken ct = default)
+    {
+        var report = new WelcomeRunReport { ClanName = reg.ClanName, PingJobId = reg.WelcomePingJobId };
+        try
+        {
+            var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
+            var logs = await _api.GetLogsAsync(apiKey, reg.ClanId, ct);
+
+            var joins = logs
+                .Where(l => l.Action is not null && MemberJoinedLogActions.Contains(l.Action))
+                .Select(l => (Entry: l, At: ParseLogTime(l.CreationTime)))
+                .Where(x => x.At is not null)
+                .OrderBy(x => x.At)
+                .ToList();
+
+            if (reg.LastWelcomedJoinAtUtc is null)
             {
-                var apiKey = _protector.Unprotect(reg.ProtectedApiKey, reg.Id);
-                var logs = await _api.GetLogsAsync(apiKey, reg.ClanId, ct);
+                // 1ª checagem depois de ligar a feature: só marca a régua a partir de agora —
+                // não manda boas-vindas retroativas para quem já estava no clã.
+                reg.LastWelcomedJoinAtUtc = joins.Count > 0 ? joins[^1].At : DateTime.UtcNow;
+                report.Note = "Primeira checagem: régua marcada a partir de agora, sem boas-vindas retroativas.";
+                await FinishAsync(reg, report, ct);
+                return report;
+            }
 
-                var joins = logs
-                    .Where(l => l.Action is not null && MemberJoinedLogActions.Contains(l.Action))
-                    .Select(l => (Entry: l, At: ParseLogTime(l.CreationTime)))
-                    .Where(x => x.At is not null)
-                    .OrderBy(x => x.At)
-                    .ToList();
+            var sendTimes = WelcomeSendTimes(reg);
+            var tz = ResolveWelcomeTimeZone();
+            var now = DateTime.UtcNow;
 
-                if (reg.LastWelcomedJoinAtUtc is null)
+            var pending = joins.Where(x => x.At > reg.LastWelcomedJoinAtUtc).ToList();
+            if (pending.Count == 0)
+                report.Note = "Nenhuma entrada nova desde a última checagem.";
+
+            foreach (var (entry, at) in pending)
+            {
+                var releaseUtc = ReleaseTimeUtc(at!.Value, sendTimes, tz);
+                var username = NewMemberUsername(entry);
+
+                // Boas-vindas represadas: só solta quando o horário de liberação da entrada já
+                // passou. O horário de liberação cresce junto com o horário da entrada, então
+                // ao achar uma ainda não liberada, todas as seguintes também não estão — para
+                // aqui e reavalia no próximo acorda (sem avançar a régua além dela).
+                if (now < releaseUtc)
                 {
-                    // 1ª checagem depois de ligar a feature: só marca a régua a partir de agora —
-                    // não manda boas-vindas retroativas para quem já estava no clã.
-                    reg.LastWelcomedJoinAtUtc = joins.Count > 0 ? joins[^1].At : DateTime.UtcNow;
-                    await _db.SaveChangesAsync(ct);
+                    foreach (var (restEntry, restAt) in pending.Skip(report.Entries.Count))
+                        report.Entries.Add(new WelcomeEntryReport(
+                            restEntry.Action, NewMemberUsername(restEntry), restAt!.Value,
+                            WelcomeEntryStatus.Held,
+                            $"Aguardando o horário de envio ({ToLocal(ReleaseTimeUtc(restAt.Value, sendTimes, tz), tz):dd/MM HH:mm})."));
+                    break;
+                }
+
+                if (string.IsNullOrWhiteSpace(username))
+                {
+                    // Log sem o nick de quem entrou: não dá para marcar ninguém. Avança a régua
+                    // para não travar a fila atrás de uma entrada que nunca vai dar certo.
+                    report.Entries.Add(new WelcomeEntryReport(
+                        entry.Action, null, at.Value, WelcomeEntryStatus.Skipped,
+                        "O log não trouxe o nick de quem entrou."));
+                    reg.LastWelcomedJoinAtUtc = at;
                     continue;
                 }
 
-                var sendTimes = WelcomeSendTimes(reg);
-                var tz = TimeZoneInfo.FindSystemTimeZoneById(ClanSocialService.WelcomeTimeZoneId);
-                var now = DateTime.UtcNow;
-
-                var pending = joins.Where(x => x.At > reg.LastWelcomedJoinAtUtc).ToList();
-                foreach (var (entry, at) in pending)
+                try
                 {
-                    // Boas-vindas represadas: só solta quando o horário de liberação da entrada já
-                    // passou. O horário de liberação cresce junto com o horário da entrada, então
-                    // ao achar uma ainda não liberada, todas as seguintes também não estão — para
-                    // aqui e reavalia no próximo acorda (sem avançar a régua além dela).
-                    if (now < ReleaseTimeUtc(at!.Value, sendTimes, tz)) break;
-
-                    var username = NewMemberUsername(entry);
-                    if (!string.IsNullOrWhiteSpace(username))
-                    {
-                        var template = reg.WelcomeMessageTemplate ?? ClanSocialService.DefaultWelcomeMessageTemplate;
-                        var message = template.Replace("{mention}", $"@{username}");
-                        await _api.SendChatMessageAsync(apiKey, reg.ClanId, message, ct);
-                    }
-                    // Sempre avança a régua, mesmo sem username (log incompleto) — senão a
-                    // mesma entrada tentaria de novo em toda checagem futura.
+                    var template = reg.WelcomeMessageTemplate ?? ClanSocialService.DefaultWelcomeMessageTemplate;
+                    var message = template.Replace("{mention}", $"@{username}");
+                    await _api.SendChatMessageAsync(apiKey, reg.ClanId, message, ct);
+                    report.Entries.Add(new WelcomeEntryReport(
+                        entry.Action, username, at.Value, WelcomeEntryStatus.Sent, "Mensagem enviada no chat."));
                     reg.LastWelcomedJoinAtUtc = at;
-                    await _db.SaveChangesAsync(ct);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    // Não avança a régua: tenta de novo na próxima checagem. Mas o motivo agora
+                    // fica visível, em vez de a fila travar em silêncio para sempre.
+                    report.Entries.Add(new WelcomeEntryReport(
+                        entry.Action, username, at.Value, WelcomeEntryStatus.Failed, ex.Message));
+                    _logger.LogWarning(ex, "Falha ao enviar boas-vindas para {User} no clã {Clan}.", username, reg.ClanName);
+                    break;
                 }
             }
-            catch (Exception ex) when (ex is WolvesvilleApiException or HttpRequestException or ApiKeyUnprotectException)
-            {
-                _logger.LogWarning(ex, "Boas-vindas do clã {Clan} falharam.", reg.ClanName);
-            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            report.Error = ex.Message;
+            _logger.LogWarning(ex, "Boas-vindas do clã {Clan} falharam.", reg.ClanName);
+        }
+
+        await FinishAsync(reg, report, ct);
+        return report;
+    }
+
+    /// <summary>Grava a régua e o carimbo/resumo da última checagem (o "o app acordou?" do painel).</summary>
+    private async Task FinishAsync(ClanRegistration reg, WelcomeRunReport report, CancellationToken ct)
+    {
+        reg.LastWelcomeCheckAtUtc = DateTime.UtcNow;
+        reg.LastWelcomeCheckResult = Truncate(report.Summary(), 300);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Não foi possível gravar o resultado das boas-vindas do clã {Clan}.", reg.ClanName);
         }
     }
+
+    /// <summary>
+    /// Fuso das boas-vindas, com queda para UTC se o host não tiver a base de fusos — melhor
+    /// liberar no horário "errado" do que a feature inteira morrer com TimeZoneNotFoundException.
+    /// </summary>
+    private TimeZoneInfo ResolveWelcomeTimeZone()
+    {
+        try
+        {
+            return TimeZoneInfo.FindSystemTimeZoneById(ClanSocialService.WelcomeTimeZoneId);
+        }
+        catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+        {
+            _logger.LogError(ex, "Fuso {Tz} indisponível no host — usando UTC nas boas-vindas.",
+                ClanSocialService.WelcomeTimeZoneId);
+            return TimeZoneInfo.Utc;
+        }
+    }
+
+    private static DateTime ToLocal(DateTime utc, TimeZoneInfo tz) => TimeZoneInfo.ConvertTimeFromUtc(utc, tz);
 
     /// <summary>
     /// O nick de quem ACABOU DE ENTRAR na entrada de log. Em "pedido de entrada aceito"

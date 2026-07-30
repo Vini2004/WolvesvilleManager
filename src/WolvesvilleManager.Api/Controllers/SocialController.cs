@@ -42,6 +42,14 @@ public class SocialController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Roda a checagem de boas-vindas agora e devolve o que aconteceu com cada entrada recente —
+    /// serve para testar sem depender do gatilho externo nem entrar/sair do clã no escuro.
+    /// </summary>
+    [HttpPost("welcome/run")]
+    public Task<WelcomeCheckResultDto> RunWelcomeCheck(int id, CancellationToken ct) =>
+        _service.RunWelcomeCheckAsync(id, ct);
+
     [HttpGet("ledger")]
     public Task<List<LedgerEntry>> Ledger(int id, CancellationToken ct) =>
         _service.GetLedgerAsync(id, ct);

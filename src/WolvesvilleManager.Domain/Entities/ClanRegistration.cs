@@ -107,4 +107,15 @@ public class ClanRegistration
     /// <c>/api/scheduler/run</c>; nulo quando não há horários ou a integração está desligada.
     /// </summary>
     public int? WelcomePingJobId { get; set; }
+
+    /// <summary>
+    /// Quando (UTC) a checagem de boas-vindas rodou pela última vez — automática ou manual.
+    /// É o jeito de saber se o app está mesmo sendo acordado: se este horário fica velho depois
+    /// de um horário de envio configurado, o gatilho externo não está disparando.
+    /// </summary>
+    public DateTime? LastWelcomeCheckAtUtc { get; set; }
+
+    /// <summary>Resumo legível do resultado da última checagem (ex.: "3 entrada(s), 0 enviada(s), 3 aguardando").</summary>
+    [MaxLength(300)]
+    public string? LastWelcomeCheckResult { get; set; }
 }

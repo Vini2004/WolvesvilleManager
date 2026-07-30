@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
+import type { WelcomeCheckResult, WelcomeCheckStatus } from '../api/types'
 import { ErrorBox, Loading, Toggle } from '../components/ui'
 import { useAsync } from '../lib/useAsync'
 import { fmtDateTime } from '../lib/format'
 
 const MAX_LEN = 500
+
+// Mesmas cores do histórico de execuções das automações (OUTCOME_META), para o painel de
+// diagnóstico ler igual ao resto do app.
+const WELCOME_STATUS_META: Record<WelcomeCheckStatus, { label: string; color: string }> = {
+  Sent: { label: 'Enviada', color: '#7fd99a' },
+  Held: { label: 'Aguardando horário', color: '#e8c98a' },
+  Skipped: { label: 'Ignorada', color: '#9b93a8' },
+  Failed: { label: 'Falhou', color: '#d9695f' },
+}
 
 export function Chat({ clanRegId }: { clanRegId: number }) {
   const chat = useAsync(async () => {
@@ -81,6 +91,24 @@ export function Chat({ clanRegId }: { clanRegId: number }) {
       setWelcomeError(e instanceof ApiError ? e.message : 'Erro inesperado.')
     } finally {
       setWelcomeBusy(false)
+    }
+  }
+
+  const [checking, setChecking] = useState(false)
+  const [checkResult, setCheckResult] = useState<WelcomeCheckResult | null>(null)
+
+  const runWelcomeCheck = async () => {
+    setChecking(true)
+    setWelcomeError(null)
+    setCheckResult(null)
+    try {
+      setCheckResult(await api.runWelcomeCheck(clanRegId))
+      welcome.reload()
+      chat.reload()
+    } catch (e: unknown) {
+      setWelcomeError(e instanceof ApiError ? e.message : 'Erro inesperado.')
+    } finally {
+      setChecking(false)
     }
   }
 
@@ -166,11 +194,58 @@ export function Chat({ clanRegId }: { clanRegId: number }) {
               )}
             </div>
 
-            <div className="mt-3 flex items-center gap-2.5">
+            <div className="mt-3 flex flex-wrap items-center gap-2.5">
               <button onClick={saveWelcome} disabled={welcomeBusy} className="btn-secondary flex-none">
                 {welcomeBusy ? '…' : welcomeSaved ? 'Salvo!' : 'Salvar'}
               </button>
+              <button onClick={runWelcomeCheck} disabled={checking} className="btn-ghost flex-none">
+                {checking ? 'Verificando…' : 'Verificar entradas agora'}
+              </button>
             </div>
+
+            <div className="mt-2.5 font-sans text-[11.5px] text-dim">
+              {welcome.data?.lastCheckAtUtc ? (
+                <>
+                  Última verificação: {fmtDateTime(welcome.data.lastCheckAtUtc)}
+                  {welcome.data.lastCheckResult ? ` — ${welcome.data.lastCheckResult}` : ''}
+                </>
+              ) : (
+                'Ainda não houve nenhuma verificação.'
+              )}
+              {(welcomeTime1 || welcomeTime2) && !welcome.data?.pingConfigured && (
+                <span className="text-gold">
+                  {' '}
+                  · Atenção: o gatilho que acorda o site nesses horários não está criado — clique em
+                  "Verificar entradas agora" para tentar criá-lo.
+                </span>
+              )}
+            </div>
+
+            {checkResult && (
+              <div className="mt-3 rounded-lg border border-[rgba(180,150,220,0.22)] px-3.5 py-3">
+                <div className="font-sans text-[12.5px] font-semibold text-ink-2">{checkResult.summary}</div>
+                {checkResult.error && (
+                  <div className="mt-1 font-sans text-[12px] text-danger">{checkResult.error}</div>
+                )}
+                {checkResult.entries.length > 0 && (
+                  <div className="mt-2 flex flex-col gap-1.5">
+                    {checkResult.entries.map((e, i) => (
+                      <div key={i} className="font-sans text-[12px] leading-relaxed">
+                        <span
+                          className="font-semibold"
+                          style={{ color: WELCOME_STATUS_META[e.status].color }}
+                        >
+                          {WELCOME_STATUS_META[e.status].label}
+                        </span>
+                        <span className="text-ink-2"> {e.username ?? '(sem nick)'}</span>
+                        <span className="text-faint"> · {fmtDateTime(e.joinedAtUtc)}</span>
+                        <div className="text-dim">{e.detail}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {welcomeError && <div className="mt-3 font-sans text-[12.5px] text-danger">{welcomeError}</div>}
           </>
         )}

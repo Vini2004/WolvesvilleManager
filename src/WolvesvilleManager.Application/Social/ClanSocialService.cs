@@ -13,8 +13,21 @@ namespace WolvesvilleManager.Application.Social;
 /// Configuração da mensagem automática de boas-vindas (aba Chat). <paramref name="SendTime1"/> e
 /// <paramref name="SendTime2"/> ("HH:mm" ou nulo) são os horários em que as boas-vindas represadas
 /// são liberadas; ambos nulos = sauda assim que o app acordar depois da entrada.
+/// <paramref name="LastCheckAtUtc"/>/<paramref name="LastCheckResult"/> mostram se o app está
+/// mesmo sendo acordado, e <paramref name="PingConfigured"/> se o gatilho externo existe.
 /// </summary>
-public record WelcomeSettingsDto(bool Enabled, string Template, string? SendTime1, string? SendTime2);
+public record WelcomeSettingsDto(
+    bool Enabled, string Template, string? SendTime1, string? SendTime2,
+    DateTime? LastCheckAtUtc, string? LastCheckResult, bool PingConfigured);
+
+/// <summary>Uma entrada de log no relatório da verificação manual.</summary>
+public record WelcomeCheckEntryDto(
+    string? Action, string? Username, DateTime JoinedAtUtc, string Status, string Detail);
+
+/// <summary>Resultado do botão "Verificar entradas agora".</summary>
+public record WelcomeCheckResultDto(
+    string Summary, string? Error, bool PingConfigured, DateTime? LastWelcomedJoinAtUtc,
+    List<WelcomeCheckEntryDto> Entries);
 
 /// <summary>Anúncios e chat do clã.</summary>
 public class ClanSocialService
@@ -35,16 +48,18 @@ public class ClanSocialService
     private readonly IWolvesvilleClient _api;
     private readonly IAppDbContext _db;
     private readonly ICronTriggerGateway _cron;
+    private readonly ScheduledTaskExecutor _executor;
     private readonly ILogger<ClanSocialService> _logger;
 
     public ClanSocialService(
         ClanKeyResolver resolver, IWolvesvilleClient api, IAppDbContext db,
-        ICronTriggerGateway cron, ILogger<ClanSocialService> logger)
+        ICronTriggerGateway cron, ScheduledTaskExecutor executor, ILogger<ClanSocialService> logger)
     {
         _resolver = resolver;
         _api = api;
         _db = db;
         _cron = cron;
+        _executor = executor;
         _logger = logger;
     }
 
@@ -57,7 +72,40 @@ public class ClanSocialService
             reg.WelcomeMessageEnabled,
             reg.WelcomeMessageTemplate ?? DefaultWelcomeMessageTemplate,
             FormatTime(reg.WelcomeSendTime1),
-            FormatTime(reg.WelcomeSendTime2));
+            FormatTime(reg.WelcomeSendTime2),
+            reg.LastWelcomeCheckAtUtc,
+            reg.LastWelcomeCheckResult,
+            reg.WelcomePingJobId is not null);
+    }
+
+    /// <summary>
+    /// Aba Chat, botão "Verificar entradas agora": roda a checagem de boas-vindas deste clã na
+    /// hora e devolve o que aconteceu com cada entrada recente do log. Também re-sincroniza o
+    /// ping externo — cobre o caso em que o "Salvo!" apareceu mas a criação do job no
+    /// cron-job.org falhou em silêncio, e os clãs que ligaram boas-vindas antes dos horários
+    /// existirem (WelcomePingJobId nulo).
+    /// </summary>
+    public async Task<WelcomeCheckResultDto> RunWelcomeCheckAsync(int clanRegistrationId, CancellationToken ct = default)
+    {
+        var reg = await _db.ClanRegistrations.FirstOrDefaultAsync(c => c.Id == clanRegistrationId, ct)
+            ?? throw new NotFoundException($"Clã registrado #{clanRegistrationId} não encontrado.");
+
+        if (!reg.WelcomeMessageEnabled)
+            throw new BusinessRuleException("As boas-vindas automáticas estão desligadas — ligue e salve antes de verificar.");
+
+        await SyncWelcomePingAsync(reg, ct);
+
+        var report = await _executor.WelcomeClanAsync(reg, ct);
+
+        return new WelcomeCheckResultDto(
+            report.Summary(),
+            report.Error,
+            reg.WelcomePingJobId is not null,
+            reg.LastWelcomedJoinAtUtc,
+            report.Entries
+                .Select(e => new WelcomeCheckEntryDto(
+                    e.Action, e.Username, e.JoinedAtUtc, e.Status.ToString(), e.Detail))
+                .ToList());
     }
 
     /// <summary>
