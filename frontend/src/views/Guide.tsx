@@ -46,7 +46,10 @@ export function Guide() {
             boas-vindas ficam represadas e liberadas a partir desses horários (quem entra depois de um
             horário é saudado no próximo), com um "toque" leve acordando o site na hora certa — mas se
             ele já estiver acordado depois do horário de liberação, a mensagem também sai. Sem
-            horários, ela sauda assim que o site acordar depois da entrada.
+            horários, ela sauda assim que o site acordar depois da entrada. O botão "Verificar
+            entradas agora" roda a checagem na hora e mostra o que aconteceu com cada entrada
+            recente (enviada, aguardando horário, ignorada ou com falha) — é por onde descobrir o
+            motivo quando parecer que nada aconteceu.
           </Topic>
           <Topic title="Atividade">Livro-razão de ouro/gemas por membro e o log de auditoria do clã.</Topic>
           <Topic title="Jogo">

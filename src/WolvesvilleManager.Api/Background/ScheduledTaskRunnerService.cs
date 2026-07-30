@@ -36,9 +36,11 @@ public class ScheduledTaskRunnerService : BackgroundService
             {
                 using var scope = _scopeFactory.CreateScope();
                 var executor = scope.ServiceProvider.GetRequiredService<ScheduledTaskExecutor>();
-                var ran = await executor.ExecuteDueTasksAsync(stoppingToken);
-                if (ran > 0)
-                    _logger.LogInformation("Agendador executou {Count} tarefa(s).", ran);
+                var result = await executor.ExecuteDueTasksAsync(stoppingToken);
+                if (result.Executed > 0 || result.Welcomed > 0)
+                    _logger.LogInformation(
+                        "Agendador executou {Count} tarefa(s) e enviou {Welcomed} boas-vinda(s).",
+                        result.Executed, result.Welcomed);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

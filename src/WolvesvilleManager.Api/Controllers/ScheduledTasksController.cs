@@ -57,9 +57,20 @@ public class ScheduledTasksController : ControllerBase
     /// </summary>
     [HttpPost("api/scheduler/run")]
     [HttpGet("api/scheduler/run")]
-    public async Task<ActionResult<object>> RunNow(CancellationToken ct)
+    public async Task<ActionResult<object>> RunNow()
     {
-        var executed = await _executor.ExecuteDueTasksAsync(ct);
-        return Ok(new { executed });
+        // NÃO usa o CancellationToken da requisição de propósito: o cron-job.org desiste em ~30s
+        // e, numa partida fria (app dormindo + banco pausado), esse cancelamento matava a batida
+        // no meio — as boas-vindas, que dependem dela, simplesmente nunca aconteciam. Aqui o
+        // trabalho tem orçamento próprio e termina mesmo se o chamador desistir.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        var result = await _executor.ExecuteDueTasksAsync(cts.Token);
+        return Ok(new
+        {
+            executed = result.Executed,
+            welcomed = result.Welcomed,
+            held = result.Held,
+            checkedClans = result.CheckedClans,
+        });
     }
 }

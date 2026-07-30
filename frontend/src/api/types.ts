@@ -257,6 +257,31 @@ export interface WelcomeSettings {
   /** Horários "HH:mm" (ou null) em que as boas-vindas represadas são liberadas. Ambos null = na hora. */
   sendTime1: string | null
   sendTime2: string | null
+  /** Quando a checagem rodou pela última vez — se ficar velho, o gatilho externo não está disparando. */
+  lastCheckAtUtc: string | null
+  lastCheckResult: string | null
+  /** Se existe o job no cron-job.org que acorda o site nos horários configurados. */
+  pingConfigured: boolean
+}
+
+/** Desfecho de uma entrada de log na verificação de boas-vindas. */
+export type WelcomeCheckStatus = 'Sent' | 'Held' | 'Skipped' | 'Failed'
+
+export interface WelcomeCheckEntry {
+  action: string | null
+  username: string | null
+  joinedAtUtc: string
+  status: WelcomeCheckStatus
+  detail: string
+}
+
+/** Resultado do botão "Verificar entradas agora". */
+export interface WelcomeCheckResult {
+  summary: string
+  error: string | null
+  pingConfigured: boolean
+  lastWelcomedJoinAtUtc: string | null
+  entries: WelcomeCheckEntry[]
 }
 
 export interface LedgerEntry {
